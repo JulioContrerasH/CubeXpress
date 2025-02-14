@@ -202,40 +202,40 @@ def dataframe_manifest(
 # print(manifests)
 
 
-# #############
-# # Ejemplo 4 #
-# #############
+#############
+# Ejemplo 4 #
+#############
 
-# crs = CRS(code="EPSG:32718")
-# geotransform = Geotransform(
-#     scaleX=90,
-#     shearX=0,
-#     translateX=329583.7418991233,
-#     scaleY=-90,
-#     shearY=0,
-#     translateY=8955272.65902687
-# )
-# width=128
-# heigth=128
+geo_metadata_1 = GeoMetadata(
+    crs=CRS(code="EPSG:32718"), 
+    geotransform = Geotransform(
+        scaleX=90,
+        shearX=0,
+        translateX=329583.7418991233,
+        scaleY=-90,
+        shearY=0,
+        translateY=8955272.65902687
+    ), 
+    width=128, 
+    height=128
+)
 
-# geo_metadata_1 = GeoMetadata(
-#     crs=crs, 
-#     geotransform=geotransform, 
-#     width=128, 
-#     height=128
-# )
-# geo_metadatas = GeoMetadatas(
-#     geometadatas=[geo_metadata_1, geo_metadata_1]
-# )
+geo_metadatas = GeoMetadatas(
+    geometadatas=[
+        geo_metadata_1
+    ]
+)
+bands = ["elevation"]
+collection = "NASA/NASADEM_HGT/001"
 
-# # Params to manifest
-# bands = ["elevation"]
-# collection = "NASA/NASADEM_HGT/001"
-# manifests = dataframe_manifest(geometadatas=geo_metadatas, bands=bands, collection=collection)
+table_manifest = dataframe_manifest(geometadatas=geo_metadatas, bands=bands, collection=collection)
 
-# # Mostrar los manifiestos generados
-# print("Manifiestos construidos desde cero:")
-# print(manifests)
+# Mostrar los manifiestos generados
+print("Manifiestos construidos desde cero:")
+print(table_manifest)
+
+
+
 
 
 
