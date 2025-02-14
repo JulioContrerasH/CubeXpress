@@ -40,20 +40,6 @@ def lonlatgeometadata(
 
     return GeoMetadatas(geometadatas=geo_metadatas)
 
-# # #############
-# # # Ejemplo 1 #
-# # #############
-
-# # Parámetros para el ejemplo 1
-# lon = -76.5
-# lat = -9.5
-# edge_size = 128
-# scale = 90
-
-# # Llamada a la función point2geometadata para un solo punto
-# geo_metadata = lonlatgeometadata(lon, lat, edge_size, scale)
-# geo_metadata
-
 
 def point2geometadata(
     points: List[Tuple[float, float]],  # Lista de tuplas (lon, lat)
@@ -72,32 +58,6 @@ def point2geometadata(
 
     # Devolver un GeoMetadatas con la lista de GeoMetadata
     return GeoMetadatas(geometadatas=geo_metadatas)
-
-
-# #############
-# # Ejemplo 1 #
-# #############
-
-# points = [(-76.5, -9.5)]
-# edge_size = 128
-# scale = 90
-
-# # Llamada a la función points2geometadatas para una lista de puntos
-# geo_metadatas = point2geometadata(points, edge_size, scale)
-# geo_metadatas
-
-# #############
-# # Ejemplo 2 #
-# #############
-
-# points = [(-76.5, -9.5), (-77.0, -9.8), (-77.5, -10.5)]
-# edge_size = 128
-# scale = 90
-
-# # Llamada a la función points2geometadatas para una lista de puntos
-# geo_metadatas = point2geometadata(points, edge_size, scale)
-# geo_metadatas
-
 
 
 def dataframe_manifest(
@@ -205,9 +165,8 @@ def dataframe_manifest(
 #############
 # Ejemplo 4 #
 #############
-
 geo_metadata_1 = GeoMetadata(
-    crs=CRS(code="EPSG:32718"), 
+    crs={'code': "EPSG:32718"}, 
     geotransform = Geotransform(
         scaleX=90,
         shearX=0,
@@ -233,6 +192,13 @@ table_manifest = dataframe_manifest(geometadatas=geo_metadatas, bands=bands, col
 # Mostrar los manifiestos generados
 print("Manifiestos construidos desde cero:")
 print(table_manifest)
+
+
+
+
+
+
+
 
 
 
