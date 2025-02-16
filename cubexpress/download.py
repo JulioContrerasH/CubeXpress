@@ -44,8 +44,8 @@ def getCube_batch(
         "driver": "GTiff",  
         "count": data_np.shape[0],
         "dtype": data_np.dtype,
-        "height": data_np.shape[1],
-        "width": data_np.shape[2],
+        "height": int(manifest_dict["grid"]["dimensions"]["height"]),
+        "width": int(manifest_dict["grid"]["dimensions"]["width"]),
         "transform": rio.Affine(
             manifest_dict["grid"]["affineTransform"]["scaleX"],
             manifest_dict["grid"]["affineTransform"]["shearX"],
