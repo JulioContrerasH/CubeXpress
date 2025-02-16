@@ -147,9 +147,8 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 # Asume que `get_image_from_manifest` es similar a `getPixels`
-def get_image_from_manifest(
+def image_from_manifest(
     manifest_dict: dict,
-    type: str = "getPixels",  # Puede ser "getPixels" o "computePixels"
     max_deep_level: Optional[int] = 5,
     quiet: Optional[bool] = False
 ) -> np.ndarray:
@@ -397,21 +396,20 @@ def check_not_found_error(error_msg: str) -> bool:
 # quiet = False
 # output_path="images"
 
-def get_image_batch(
+def getCube_batch(
     row: pd.Series,
     output_path: str,
     max_deep_level: Optional[int] = 5,
     quiet: Optional[bool] = False
 ) -> pathlib.Path:
+    
     if not quiet:
         print(f"Downloading {row.outname}...")
 
-
     manifest_dict = json.loads(row.manifest) if isinstance(row.manifest, str) else row.manifest
 
-
     # Get the image data from the manifest
-    data_np = get_image_from_manifest(
+    data_np = image_from_manifest(
         manifest_dict=manifest_dict,
         max_deep_level=max_deep_level,
         quiet=quiet
@@ -421,7 +419,7 @@ def get_image_batch(
 
     # Prepare metadata for saving the image
     metadata_rio = {
-        "driver": "GTiff",
+        "driver": "GTiff", # --> esto podria cambiarse ya que no se controla desde el manifest, si lo quieres como png?, si lo quieres como cog
         "count": data_np.shape[0],
         "dtype": data_np.dtype,
         "height": data_np.shape[1],
@@ -468,7 +466,7 @@ def get_image_batch(
 
 # computePixels()
 
-def getPixels(
+def getCube(
     table: pd.DataFrame,
     nworkers: Optional[int] = None,
     deep_level: Optional[int] = 5,
@@ -487,7 +485,7 @@ def getPixels(
     if nworkers is None:
         results = []
         for _, row in table.iterrows():
-            result = get_image_batch(
+            result = getCube_batch(
                 row=row, 
                 output_path=output_path,
                 max_deep_level=deep_level, 
@@ -498,7 +496,7 @@ def getPixels(
     else:
         with ThreadPoolExecutor(max_workers=nworkers) as executor:
             futures = [
-                executor.submit(get_image_batch, row, output_path, deep_level, quiet)
+                executor.submit(getCube_batch, row, output_path, deep_level, quiet)
                 for _, row in table.iterrows()
             ]
             results = []
@@ -527,8 +525,8 @@ geo_metadata_1 = RasterTransform(
         shearY=0,
         translateY=8955272.65902687
     ), 
-    width=8192, 
-    height=8192
+    width=128, 
+    height=128
 )
 print(geo_metadata_1)
 
@@ -580,8 +578,8 @@ table_manifest2 = dataframe_manifest(
 # json.dumps()
 
 
-# getPixels(table_manifest, nworkers=4, deep_level=5, output_path="images", quiet=False)
-getPixels(table_manifest2, nworkers=4, deep_level=5, output_path="images_deep", quiet=False)
+getCube(table_manifest, nworkers=4, deep_level=5, output_path="images", quiet=False)
+getCube(table_manifest2, nworkers=4, deep_level=5, output_path="images_deep", quiet=False)
 
 table_manifest2.manifest[0]
 
