@@ -6,10 +6,11 @@ docs/source
 __pycache__/
 *.py[cod]
 *$py.class
-
+images
+images_deep
 # C extensions
 *.so
-
+borrador
 # Distribution / packaging
 .Python
 build/
