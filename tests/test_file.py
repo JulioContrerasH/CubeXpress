@@ -1,5 +1,5 @@
 import pytest
-from cubexpress.geo_typing import CRS, Geotransform, Bbox, GeoMetadata, GeoMetadatas
+from cubexpress.geotyping import CRS, Geotransform, Bbox, GeoMetadata, GeoMetadatas
 
 def test_geospatial_data_creation():
     # Creamos instancias válidas de las clases
