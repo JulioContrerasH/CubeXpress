@@ -106,6 +106,9 @@ sentinel_bands = df_s2_aviris_norm.columns[2:]
 band_indices = {band: df_s2_aviris_norm[df_s2_aviris_norm[band].notnull()].index.to_list()
                 for band in sentinel_bands}
 
+
+neon_images/intersections/neon
+
 # Cargar la imagen NEON hiperespectral
 with rio.open(neon_image_path) as src:
     neon_img = src.read()  # Leer todas las bandas (426, H, W)
