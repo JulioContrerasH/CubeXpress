@@ -15,7 +15,6 @@ def getCube_batch(
     row: pd.Series,
     output_path: str,
     max_deep_level: Optional[int] = 5,
-    format: Optional[str] = "GTiff",
     quiet: Optional[bool] = False,
 ) -> Optional[pathlib.Path]:
     """
@@ -44,48 +43,30 @@ def getCube_batch(
     
     if data_np is None:
         return None
+
+    outfile = pathlib.Path(output_path) / row.outname
+    outfile.parent.mkdir(parents=True, exist_ok=True)
     
-    if "GTiff".upper() == "GTiff":
-        outfile = pathlib.Path(output_path) / row.outname
-        outfile.parent.mkdir(parents=True, exist_ok=True)
-        metadata_rio = {
-            "driver": "GTiff",  
-            "count": data_np.shape[0],
-            "dtype": data_np.dtype,
-            "height": int(manifest_dict["grid"]["dimensions"]["height"]),
-            "width": int(manifest_dict["grid"]["dimensions"]["width"]),
-            "transform": rio.Affine(
-                manifest_dict["grid"]["affineTransform"]["scaleX"],
-                manifest_dict["grid"]["affineTransform"]["shearX"],
-                manifest_dict["grid"]["affineTransform"]["translateX"],
-                manifest_dict["grid"]["affineTransform"]["shearY"],
-                manifest_dict["grid"]["affineTransform"]["scaleY"],
-                manifest_dict["grid"]["affineTransform"]["translateY"]
-            ),
-            "crs": manifest_dict["grid"]["crsCode"],
-        }
+    metadata_rio = {
+        "driver": "GTiff",  
+        "count": data_np.shape[0],
+        "dtype": data_np.dtype,
+        "height": int(manifest_dict["grid"]["dimensions"]["height"]),
+        "width": int(manifest_dict["grid"]["dimensions"]["width"]),
+        "transform": rio.Affine(
+            manifest_dict["grid"]["affineTransform"]["scaleX"],
+            manifest_dict["grid"]["affineTransform"]["shearX"],
+            manifest_dict["grid"]["affineTransform"]["translateX"],
+            manifest_dict["grid"]["affineTransform"]["shearY"],
+            manifest_dict["grid"]["affineTransform"]["scaleY"],
+            manifest_dict["grid"]["affineTransform"]["translateY"]
+        ),
+        "crs": manifest_dict["grid"]["crsCode"],
+    }
 
-        with rio.open(outfile, "w", **metadata_rio) as dst:
-            dst.write(data_np)
+    with rio.open(outfile, "w", **metadata_rio) as dst:
+        dst.write(data_np)
 
-    elif format.upper() == "PNG":
-        outfile = pathlib.Path(output_path) / (row.outname.split(".")[0] + ".png")
-        outfile.parent.mkdir(parents=True, exist_ok=True)
-        if data_np.shape[0] >= 3:
-            rgb_data = data_np[:3, :, :]
-        else:
-            raise ValueError("PNG output requires at least 3 bands for RGB format.")
-        img_to_save = np.moveaxis(rgb_data, 0, -1)
-
-        if img_to_save.dtype == np.float32 or img_to_save.dtype == np.float64:
-            img_to_save = (255 * img_to_save).astype(np.uint8)
-        elif img_to_save.dtype != np.uint8 and img_to_save.dtype != np.uint16:
-            img_to_save = img_to_save.astype(np.uint8) 
-
-        img = Image.fromarray(img_to_save)
-        img.save(outfile, format="PNG")
-    else:
-        raise ValueError(f"Unsupported format: {format}. Use 'GTiff' or 'PNG'.")
 
     gc.collect()
     return outfile
@@ -95,7 +76,6 @@ def getCube(
     nworkers: Optional[int] = None,
     deep_level: Optional[int] = 5,
     output_path: Union[str, pathlib.Path, None] = None,
-    format: Optional[str] = "GTiff",
     quiet: bool = False
 ) -> List[pathlib.Path]:
     """
@@ -133,7 +113,7 @@ def getCube(
     else:
         with ThreadPoolExecutor(max_workers=nworkers) as executor:
             futures = {
-                executor.submit(getCube_batch, row, output_path, deep_level, format, quiet): row
+                executor.submit(getCube_batch, row, output_path, deep_level, quiet): row
                 for _, row in table.iterrows()
             }
             for future in concurrent.futures.as_completed(futures):
