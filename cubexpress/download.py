@@ -75,8 +75,8 @@ def getCube_batch(
             rgb_data = data_np[:3, :, :]
         else:
             raise ValueError("PNG output requires at least 3 bands for RGB format.")
-        img_to_save = np.moveaxis(rgb_data, 0, -1)
-        img = Image.fromarray(img_to_save)
+        # img_to_save = np.moveaxis(rgb_data, 0, -1)
+        img = Image.fromarray(rgb_data)
         img.save(outfile, format="PNG")
     else:
         raise ValueError(f"Unsupported format: {format}. Use 'GTiff' or 'PNG'.")
