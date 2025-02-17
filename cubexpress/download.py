@@ -15,8 +15,8 @@ def getCube_batch(
     row: pd.Series,
     output_path: str,
     max_deep_level: Optional[int] = 5,
+    format: Optional[str] = "GTiff",
     quiet: Optional[bool] = False,
-    format: Optional[str] = "GTiff"
 ) -> Optional[pathlib.Path]:
     """
     Downloads and saves an image from a manifest entry.
