@@ -9,6 +9,7 @@ import pandas as pd
 import gc
 import rasterio as rio
 import ee
+import json
 
 def quadsplit_manifest(manifest: dict) -> List[dict]:
     """
@@ -191,7 +192,7 @@ def image_from_manifest(
     elif 'expression' in manifest_dict:
         manifest_dict = eval(str(manifest_dict))
         manifest_dict["expression"] = ee.deserializer.decode(
-            eval(manifest_dict["expression"])
+            json.loads(manifest_dict["expression"])
         )
         return computePixels_np(manifest_dict, max_deep_level, quiet)
     else:

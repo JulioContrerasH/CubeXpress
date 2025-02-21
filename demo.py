@@ -6,138 +6,78 @@ import ee
 ee.Initialize()
 
 
-geo_metadata_1 = RasterTransform(
-    crs="EPSG:32718", 
-    geotransform = GeotransformDict(
-        scaleX=90,
-        shearX=0,
-        translateX=329583.7418991233,
-        scaleY=-90,
-        shearY=0,
-        translateY=8955272.65902687
-    ), 
-    width=8192, 
-    height=8192
-)
-print(geo_metadata_1)
-
-geo_metadata_3 = RasterTransform(
-    crs="EPSG:3857", 
-    geotransform = dict(
-        scaleX=100,
-        shearX=0,
-        translateX=300000,
-        scaleY=-100,
-        shearY=0,
-        translateY=400000
-    ), 
-    width=256, 
-    height=256
-)
-
-# Create a set of metadata entries
-metadata_set = RasterTransformSet(
-    rastertransformset=[
-        geo_metadata_1
-    ]
-)
-bands = ["elevation"]
-collection = "NASA/NASADEM_HGT/001"
-
-# Table manifest
-table_manifest = dataframe_manifest(
-    geometadatas=metadata_set, 
-    bands=bands, 
-    image=collection
-)
-print(table_manifest)
 
 
-table_manifest.manifest[0]
-
-table_manifest2 = dataframe_manifest(
-    geometadatas=metadata_set, 
-    bands=bands, 
-    image=ee.Image("NASA/NASADEM_HGT/001").divide(1000)
-)
-
-
-getCube(table_manifest, nworkers=4, deep_level=5, output_path="images", quiet=False)
-getCube(table_manifest2, nworkers=4, deep_level=5, output_path="images_deep", quiet=False)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import rasterio as rio
+from cubexpress import RasterTransform, RasterTransformSet
+import cubexpress
 import pandas as pd
-import numpy as np
+import geopandas as gpd
 
-# Rutas de archivos
+import ee
+ee.Initialize()
 
-neon_image_path = "/home/contreras/Documents/GitHub/NEON/neon_images/projects_neon-prod-earthengine_assets_HSI_REFL_002_2022_UNDE_5__0000.tif"
-table_path = "/home/contreras/Documents/GitHub/NEON/tables/S2toAVIRIS_norm.csv"
-output_path = "/home/contreras/Documents/GitHub/NEON/neon_images/projects_neon-prod-earthengine_assets_HSI_REFL_002_2022_UNDE_5__0000_s2.tif"
+# Load the table of images positions
+table_path = "tables/neon_equigrid_geodata.gpkg"
+table = gpd.read_file(table_path)
+table["ID"] = ["NEON_S2__" + str(i + 1).zfill(4) for i in range(len(table))]
+bands_neon = [f"B{str(i).zfill(3)}" for i in range(1, 427)]
+bands_s2 = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B9", "B10", "B11", "B12"]
 
-df_s2_aviris_norm = pd.read_csv(table_path)
 
-sentinel_bands = df_s2_aviris_norm.columns[2:] 
-
-# Crear un diccionario con los índices de bandas NEON que corresponden a cada banda Sentinel-2
+# Load the table of weights
+table_path_norm = "tables/S2toAVIRIS_norm.csv"
+df_s2_aviris_norm = pd.read_csv(table_path_norm)
 band_indices = {band: df_s2_aviris_norm[df_s2_aviris_norm[band].notnull()].index.to_list()
-                for band in sentinel_bands}
+                for band in bands_s2}
 
 
-neon_images/intersections/neon
+# Download the images
+for i, row in table.iterrows():
+    
+    ###########################
+    ## Processing image neon ##
+    ###########################
+    neon_id = row["image_id_neon"]
+    neon_img = ee.Image(neon_id)
+    s2_alike_bands = {} # Crear diccionario para almacenar las bandas generadas
+    for band in bands_s2:
 
-# Cargar la imagen NEON hiperespectral
-with rio.open(neon_image_path) as src:
-    neon_img = src.read()  # Leer todas las bandas (426, H, W)
-    profile = src.profile  # Guardar metadatos
+        indices = band_indices[band] 
+        weights = df_s2_aviris_norm.loc[indices, band].values  # Pesos de convolución
+        neon_band_names = [f"B{str(i + 1).zfill(3)}" for i in indices]
+        expression = " + ".join([f"{w} * b{i+1}" for i, w in zip(indices, weights)])
 
+        s2_alike_band = neon_img.expression(expression, {
+            f'b{i+1}': neon_img.select(f"B{str(i + 1).zfill(3)}") for i in indices
+        })
+        s2_alike_bands[band] = s2_alike_band
 
-# Obtener dimensiones de la imagen
-_, height, width = neon_img.shape
+    s2_alike_image = ee.Image(list(s2_alike_bands.values())).rename(list(bands_s2))
 
-# Crear un array para la imagen "S2-alike" con 12 bandas
-s2_alike_img = np.zeros((len(sentinel_bands), height, width), dtype=np.float32)
+    x_centroid = row["utm_x"]
+    y_centroid = row["utm_y"]
+    xmin = x_centroid - 5200/2
+    ymax = y_centroid + 5200/2
+    raster_transform = RasterTransform(
+        crs=row["utm"],
+        geotransform = dict(
+            scaleX=1,
+            shearX=0,
+            translateX=xmin,
+            scaleY=-1,
+            shearY=0,
+            translateY=ymax
+        ), 
+        width=5200, 
+        height=5200
+    )
+    raster_transform_set = RasterTransformSet(rastertransformset = [raster_transform])
 
-# Aplicar la convolución para generar cada banda de Sentinel-2
-for i, band in enumerate(sentinel_bands):
+    table_manifest = cubexpress.dataframe_manifest(
+        geometadatas=raster_transform_set, 
+        bands=bands_s2, 
+        image=s2_alike_image,
+    )
+    table_manifest["outname"] = row["ID"] + ".tif"
 
-    indices = band_indices[band]  # Bandas de NEON a usar
-    weights = df_s2_aviris_norm.loc[indices, band].values  # Pesos de convolución
-
-    # Asegurar que los pesos no tengan NaN
-    weights = np.nan_to_num(weights)
-
-    # Multiplicar las bandas seleccionadas por sus pesos y sumarlas
-    s2_alike_img[i] = np.tensordot(weights, neon_img[indices, :, :], axes=([0], [0]))
-
-# Actualizar el perfil para la nueva imagen con 12 bandas
-profile.update(count=s2_alike_img.shape[0], dtype='float32')
-
-# Guardar la imagen resultante
-with rio.open(output_path, "w", **profile) as dst:
-    dst.write(s2_alike_img)
-
-print(f"Imagen Sentinel-2 generada: {output_path}")
+    cubexpress.getCube(table_manifest, nworkers=16, deep_level=6, output_path="/media/disk/databases/LuisGomez/NEON")
