@@ -87,23 +87,111 @@ for i, row in table.iterrows():
 
 import ee
 import cubexpress
-from cubexpress import RasterTransform, RasterTransformSet, lonlat2geoTransforms
+from cubexpress import RasterTransform, RasterTransformSet, lonlat2geoTransforms, points2geoTransforms
 
 ee.Initialize(project = "ee-julius013199")
+# ee.Initialize(opt_url="https://earthengine-highvolume.googleapis.com")
 
-raster_transform = cubexpress.lonlat2geoTransforms(
-    lon = -76.5, 
-    lat = -9.5, 
-    edge_size = 128, 
-    scale = 90
-)
 
-table = fastcubo.query_getPixels_image(
-    points=[(-76.5, -9.5), (-76.5, -10.5), (-77.5, -10.5)],
-    collection="NASA/NASADEM_HGT/001",
-    bands=["elevation"],
+################
+## 1) Example ##
+################
+
+raster_transform_set = cubexpress.lonlat2geoTransforms(
+    lon=-76.5,
+    lat=-9.5,
     edge_size=128,
-    resolution=90
+    scale=90
 )
 
-fastcubo.getPixels(table, nworkers=4, output_path="demo1")
+table_manifest = cubexpress.dataframe_manifest(
+    geometadatas=raster_transform_set,
+    bands=["elevation"],
+    image="NASA/NASADEM_HGT/001",
+)
+
+cubexpress.getCube(table_manifest, nworkers=4, deep_level=5, output_path="DEM")
+
+
+################
+## 2) Example ##
+################
+
+points = [
+    (-76.5, -9.5),
+    (-76.5, -10.5),
+    (-77.5, -10.5)
+]
+
+edge_size = 128 
+scale = 90    
+
+raster_transform_set = points2geoTransforms(points, edge_size, scale)
+
+table_manifest = cubexpress.dataframe_manifest(
+    geometadatas=raster_transform_set,
+    bands=["elevation"],
+    image="NASA/NASADEM_HGT/001",
+)
+table_manifest.iloc[0]
+
+cubexpress.getCube(table_manifest, nworkers=4, deep_level=5, output_path="DEM")
+
+
+################
+## 3) Example ##
+################
+
+# Define raster transform
+raster_transform = RasterTransform(
+    crs="EPSG:32718",
+    geotransform = {
+        "scaleX": 90,
+        "shearX": 0,
+        "translateX": 329583.741899,
+        "scaleY": -90,
+        "shearY": 0,
+        "translateY": 8955272.659027
+    },
+    width=128,
+    height=128
+)
+
+raster_transform_set = RasterTransformSet(rastertransformset=[raster_transform])
+
+table_manifest = cubexpress.dataframe_manifest(
+    geometadatas=raster_transform_set,
+    bands=["elevation"],
+    image="NASA/NASADEM_HGT/001"
+)
+
+cubexpress.getCube(table_manifest, nworkers=4, deep_level=5, output_path="DEM")
+
+################
+## 4) Example ##
+################
+
+# Define raster transform
+raster_transform = RasterTransform(
+    crs="EPSG:32718",
+    geotransform = {
+        "scaleX": 90,
+        "shearX": 0,
+        "translateX": 329583.741899,
+        "scaleY": -90,
+        "shearY": 0,
+        "translateY": 8955272.659027
+    },
+    width=128,
+    height=128
+)
+
+raster_transform_set = RasterTransformSet(rastertransformset=[raster_transform])
+
+table_manifest = cubexpress.dataframe_manifest(
+    geometadatas=raster_transform_set,
+    bands=["elevation"],
+    image=ee.Image("NASA/NASADEM_HGT/001").divide(1000)
+)
+
+cubexpress.getCube(table_manifest, nworkers=4, deep_level=5, output_path="DEM")
