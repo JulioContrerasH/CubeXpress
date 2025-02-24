@@ -51,9 +51,25 @@ def lonlat2geoTransforms(
         translateY=y + half_extent
     )
 
-    return RasterTransformSet([
-        RasterTransform(crs=crs, geotransform=geotransform, width=edge_size, height=edge_size)
-    ])
+    return RasterTransformSet(
+        rastertransformset=[
+            RasterTransform(
+                crs=crs,
+                geotransform=geotransform,
+                width=edge_size,
+                height=edge_size
+            )
+        ]
+    )
+
+
+raster_transform = lonlat2geoTransforms(
+    lon = -76.5, 
+    lat = -9.5, 
+    edge_size = 128, 
+    scale = 90
+)
+
 
 def points2geoTransforms(
     points: List[Tuple[float, float]],  
