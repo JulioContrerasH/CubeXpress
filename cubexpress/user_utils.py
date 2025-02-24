@@ -1,12 +1,11 @@
 from cubexpress.geotyping import GeotransformDict, RasterTransform, RasterTransformSet
-from typing import List, Tuple
 import utm
 
 
-def geo2UTM(
+def geo2utm(
     lon: float, 
     lat: float
-) -> Tuple[float, float, str]:
+) -> tuple[float, float, str]:
     """
     Converts latitude and longitude coordinates to UTM coordinates and returns the EPSG code.
 
@@ -21,7 +20,8 @@ def geo2UTM(
     epsg_code = f"326{zone:02d}" if lat >= 0 else f"327{zone:02d}"
     return x, y, f"EPSG:{epsg_code}"
 
-def lonlat2geoTransforms(
+def lonlat2rt(
+    id: str,
     lon: float, 
     lat: float, 
     edge_size: int, 
@@ -31,6 +31,7 @@ def lonlat2geoTransforms(
     Generates a RasterTransformSet for a given point using its UTM projection.
 
     Args:
+        id (str): Identifier for the raster.
         lon (float): Longitude.
         lat (float): Latitude.
         edge_size (int): Number of pixels in the raster.
@@ -39,7 +40,7 @@ def lonlat2geoTransforms(
     Returns:
         RasterTransformSet: Transformation metadata for the raster.
     """
-    x, y, crs = geo2UTM(lon, lat)
+    x, y, crs = geo2utm(lon, lat)
     half_extent = (edge_size * scale) / 2
 
     geotransform = GeotransformDict(
@@ -51,37 +52,10 @@ def lonlat2geoTransforms(
         translateY=y + half_extent
     )
 
-    return RasterTransformSet(
-        rastertransformset=[
-            RasterTransform(
-                crs=crs,
-                geotransform=geotransform,
-                width=edge_size,
-                height=edge_size
-            )
-        ]
+    return RasterTransform(
+        id=id,
+        crs=crs,
+        geotransform=geotransform,
+        width=edge_size,
+        height=edge_size
     )
-
-
-def points2geoTransforms(
-    points: List[Tuple[float, float]],  
-    edge_size: int, 
-    scale: int
-) -> RasterTransformSet:
-    """
-    Generates a RasterTransformSet for a list of geographic points.
-
-    Args:
-        points (List[Tuple[float, float]]): List of (longitude, latitude) tuples.
-        edge_size (int): Number of pixels in the raster.
-        scale (int): Spatial resolution in meters per pixel.
-    
-    Returns:
-        RasterTransformSet: Collection of raster transformations.
-    """
-    transforms = [
-        lonlat2geoTransforms(lon, lat, edge_size, scale).rastertransformset[0]
-        for lon, lat in points
-    ]
-    
-    return RasterTransformSet(rastertransformset=transforms)

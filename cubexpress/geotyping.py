@@ -10,6 +10,12 @@ from pyproj import CRS
 # Type definitions
 NumberType: TypeAlias = int | float
 
+# Constants for required keys in the geotransform
+REQUIRED_KEYS: Final[Set[str]] = {
+    'scaleX', 'shearX', 'translateX',
+    'scaleY', 'shearY', 'translateY'
+}
+
 class GeotransformDict(TypedDict):
     """
     Type definition for a geotransform dictionary containing spatial transformation parameters.
@@ -29,17 +35,13 @@ class GeotransformDict(TypedDict):
     shearY: NumberType
     translateY: NumberType
 
-# Constants for required keys in the geotransform
-REQUIRED_KEYS: Final[Set[str]] = {
-    'scaleX', 'shearX', 'translateX',
-    'scaleY', 'shearY', 'translateY'
-}
 
 class RasterTransform(BaseModel):
     """
     Represents a single geospatial metadata entry with CRS and transformation information.
     
     Attributes:
+        id (str): The unique identifier for the raster metadata.
         crs (str): The Coordinate Reference System string (EPSG code or WKT).
         geotransform (GeotransformDict): A dictionary containing spatial transformation parameters.
         width (int): Raster width in pixels.
@@ -47,6 +49,7 @@ class RasterTransform(BaseModel):
     
     Example:
         >>> metadata = RasterTransform(
+        ...     id="image1",
         ...     crs="EPSG:4326",
         ...     geotransform={
         ...         'scaleX': 1.0, 'shearX': 0, 'translateX': 100.0,
@@ -57,6 +60,7 @@ class RasterTransform(BaseModel):
         ... )
         RasterTransform(crs='EPSG:4326', width=1000, height=1000)
     """
+    id: str
     crs: str
     geotransform: GeotransformDict
     width: int
@@ -164,6 +168,7 @@ class RasterTransformSet(BaseModel):
         crs_set: Set[str] = {meta.crs for meta in self.rastertransformset}
         validated_crs: Set[str] = set()
         
+        # Validate CRS formats
         for crs in crs_set:
             if crs not in validated_crs:
                 try:
@@ -172,6 +177,11 @@ class RasterTransformSet(BaseModel):
                 except Exception as e:
                     raise ValueError(f"Invalid CRS format: {crs}") from e
         
+        # Validate ids, they must be unique
+        ids = {meta.id for meta in self.rastertransformset}
+        if len(ids) != len(self.rastertransformset):
+            raise ValueError("All entries must have unique IDs")
+
         return self
     
     def export_df(self) -> pd.DataFrame:
@@ -186,7 +196,8 @@ class RasterTransformSet(BaseModel):
             >>> print(df)
         """
         return pd.DataFrame([
-            {
+            {   
+                'id': meta.id,
                 'x': meta.geotransform['translateX'],
                 'y': meta.geotransform['translateY'],
                 'crs': meta.crs,

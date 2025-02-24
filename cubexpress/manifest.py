@@ -1,24 +1,23 @@
 from cubexpress.geotyping import RasterTransformSet
-from typing import List, Union
-
 import ee
 import re
 import pandas as pd
 
 def dataframe_manifest(
-    geometadatas: RasterTransformSet,
-    bands: List[str] = [],
-    image: Union[str, ee.Image] = ""
+    geometadatas: RasterTransformSet,    
+    image: str | ee.Image,
+    bands: list[str],
 ) -> pd.DataFrame:
     """
-    Generates a DataFrame manifest for geospatial metadata, including transformation 
-    parameters, resolution, and other properties.
+    Generates a DataFrame manifest for geospatial metadata, including 
+    transformation parameters, resolution, and other properties.
 
     Args:
         geometadatas (RasterTransformSet): Set of geospatial metadata entries.
         bands (List[str], optional): List of band names to include in the manifest.
         image (Union[str, ee.Image], optional): The Earth Engine expression or assetId. 
-            If it's an `ee.Image`, it will be serialized, otherwise, the string is treated as an asset ID.
+            If it's an `ee.Image`, it will be serialized, otherwise, the string
+            is treated as an asset ID.
 
     Returns:
         pd.DataFrame: A DataFrame containing the metadata manifest, including geospatial 

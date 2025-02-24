@@ -5,7 +5,6 @@ from typing import Optional, List
 
 import io
 import numpy as np
-import pandas as pd
 import gc
 import rasterio as rio
 import ee

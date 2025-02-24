@@ -1,7 +1,20 @@
-from cubexpress.user_utils import lonlat2geoTransforms, points2geoTransforms
-from cubexpress.geotyping import RasterTransform, RasterTransformSet, GeotransformDict
-from cubexpress.download import getCube
-from cubexpress.manifest import dataframe_manifest
+from cubexpress.user_utils import lonlat2rt
+from cubexpress.geotyping import RasterTransform, RasterTransformSet
+from cubexpress.download import getcube
+from cubexpress.manifest import getmanifest
+from cubexpress.getstats import getstats
 
+# Export the functions
+__all__ = [
+    "lonlat2rt",
+    "RasterTransform",
+    "RasterTransformSet",
+    "getcube",
+    "getmanifest",
+    "getstats"
+]
 
-__version__ = "0.0.1"
+# Dynamic version import
+import importlib.metadata
+
+__version__ = importlib.metadata.version("cubexpress")
