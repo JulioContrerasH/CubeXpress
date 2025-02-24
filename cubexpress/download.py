@@ -25,7 +25,6 @@ def getCube_batch(
         output_path (str): Directory where the image will be saved.
         max_deep_level (Optional[int]): Maximum recursion depth for fetching the image.
         quiet (Optional[bool]): If True, suppresses console output.
-        format (Optional[str]): Output format, either "GTiff" (default) or "PNG".
 
     Returns:
         Optional[pathlib.Path]: The path to the saved image, or None if download fails.
@@ -86,7 +85,6 @@ def getCube(
         nworkers (Optional[int]): Number of parallel workers. If None, runs sequentially.
         deep_level (Optional[int]): Maximum recursion depth for fetching images.
         output_path (Union[str, pathlib.Path, None]): Directory where images will be saved.
-        format (Optional[str]): Output format, either "GTiff" (default) or "PNG".
         quiet (bool): If True, suppresses console output.
 
     Returns:
@@ -105,7 +103,6 @@ def getCube(
                 row=row, 
                 output_path=output_path,
                 max_deep_level=deep_level, 
-                format=format,
                 quiet=quiet
             )
             if result:

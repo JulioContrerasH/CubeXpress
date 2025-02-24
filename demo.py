@@ -81,3 +81,29 @@ for i, row in table.iterrows():
     table_manifest["outname"] = row["ID"] + ".tif"
 
     cubexpress.getCube(table_manifest, nworkers=16, deep_level=6, output_path="/media/disk/databases/LuisGomez/NEON")
+
+
+
+
+import ee
+import cubexpress
+from cubexpress import RasterTransform, RasterTransformSet, lonlat2geoTransforms
+
+ee.Initialize(project = "ee-julius013199")
+
+raster_transform = cubexpress.lonlat2geoTransforms(
+    lon = -76.5, 
+    lat = -9.5, 
+    edge_size = 128, 
+    scale = 90
+)
+
+table = fastcubo.query_getPixels_image(
+    points=[(-76.5, -9.5), (-76.5, -10.5), (-77.5, -10.5)],
+    collection="NASA/NASADEM_HGT/001",
+    bands=["elevation"],
+    edge_size=128,
+    resolution=90
+)
+
+fastcubo.getPixels(table, nworkers=4, output_path="demo1")
