@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
-from typing import List, Set, TypeAlias, Final
+from typing import List, Set, TypeAlias, Final, Any
 from typing_extensions import TypedDict
 
 import pandas as pd
 from pydantic import BaseModel, field_validator, model_validator, model_validator
 from pyproj import CRS, Transformer
+
+import ee
+
 
 # Type definitions
 NumberType: TypeAlias = int | float
@@ -112,7 +115,6 @@ class RasterTransform(BaseModel):
         ... )
         RasterTransform(crs='EPSG:4326', width=1000, height=1000)
     """
-    id: str
     crs: str
     geotransform: GeotransformDict
     width: int
@@ -194,7 +196,27 @@ class RasterTransform(BaseModel):
         return f"RasterTransform(crs={self.crs}, width={self.width}, height={self.height})\n\nGeotransform:\n{geotransform_df}"
 
 
-class RasterTransformSet(BaseModel):
+class Request(BaseModel):
+    id: str
+    raster_transform: RasterTransform
+    image: Any
+    bands: List[str]
+    _expression_key: str = None
+    
+    @model_validator(mode="after")
+    def validate_image(self):
+        if isinstance(self.image, ee.Image):
+            self.image = self.image.serialize()
+            self._expression_key = 'assetId'
+        else:
+            self.image = self.image
+            self._expression_key = 'expression'
+
+        return self
+
+
+
+class RequestSet(BaseModel):
     """
     Container for multiple RasterTransform instances with bulk validation capabilities.
     
@@ -205,13 +227,14 @@ class RasterTransformSet(BaseModel):
         >>> metadatas = RasterTransformSet(rastertransformset=[metadata1, metadata2])
         >>> df = metadatas.export_df()
     """
-    rastertransformset: List[RasterTransform]
-    same_coordinates: bool = False
-    same_image: bool = False
-    same_crs: bool = False
+    requestset: List[Request]
+    _dataframe: Any = None
+    _same_coordinates: bool = False
+    _same_ee_images: bool = False
+    _same_crs: bool = False
     
     @model_validator(mode="after")
-    def validate_crs(self) -> RasterTransformSet:
+    def validate_metadata(self) -> RequestSet:
         """
         Validates that all entries have consistent and valid CRS formats.
 
@@ -221,7 +244,7 @@ class RasterTransformSet(BaseModel):
         Raises:
             ValueError: If any CRS is invalid or inconsistent.
         """
-        crs_set: Set[str] = {meta.crs for meta in self.rastertransformset}
+        crs_set: Set[str] = {meta.raster_transform.crs for meta in self.requestset}
         validated_crs: Set[str] = set()
         
         # Validate CRS formats
@@ -234,18 +257,27 @@ class RasterTransformSet(BaseModel):
                     raise ValueError(f"Invalid CRS format: {crs}") from e
         
         # Validate ids, they must be unique
-        ids = {meta.id for meta in self.rastertransformset}
-        if len(ids) != len(self.rastertransformset):
+        ids = {meta.id for meta in self.requestset}
+        if len(ids) != len(self.requestset):
             raise ValueError("All entries must have unique IDs")
 
         # Upgrade same_crss to True if all CRS are the same
-        self.same_crs = len(validated_crs) == 1
+        self._same_crs = len(validated_crs) == 1
 
         # Upgrade same_coordinates to True if all coordinates are the same
+        self._dataframe = self.create_manifests()
+
+        # Check if all coordinates are the same
+        if self._dataframe[['lon', 'lat']].nunique().eq(1).all():
+            self._same_coordinates = True
+
+        # Check if all EE images (meta._expression_key) are the same
+        if self._dataframe["image"].nunique() == 1:
+            self._same_ee_images = True
         
         return self
-    
-    def export_df(self) -> pd.DataFrame:
+
+    def create_manifests(self) -> pd.DataFrame:
         """
         Exports the raster metadata to a pandas DataFrame.
 
@@ -256,14 +288,15 @@ class RasterTransformSet(BaseModel):
             >>> df = raster_transform_set.export_df()
             >>> print(df)
         """
-        # Use ProcessPoolExecutor for CPU-bound tasks
+        # Use ProcessPoolExecutor for CPU-bound tasks to convert raster transforms to lon/lat
         with ProcessPoolExecutor(max_workers=None) as executor:
             # Submit all tasks to the executor
-            futures = [executor.submit(rt2lonlat, rt) for rt in self.rastertransformset]
+            futures = [executor.submit(rt2lonlat, rt.raster_transform) for rt in self.requestset]
             
             # Collect results as they complete
-            points = [future.result() for future in futures]                
+            points = [future.result() for future in futures]
             lon, lat, x, y = zip(*points)
+
 
         return pd.DataFrame([
             {   
@@ -272,14 +305,31 @@ class RasterTransformSet(BaseModel):
                 'lat': lat[index],
                 'x': x[index],
                 'y': y[index],
-                'crs': meta.crs,
-                'width': meta.width,
-                'height': meta.height,
-                'geotransform': meta.geotransform
-            }
-            for index, meta in enumerate(self.rastertransformset)
+                'crs': meta.raster_transform.crs,
+                'width': meta.raster_transform.width,
+                'height': meta.raster_transform.height,
+                'geotransform': meta.raster_transform.geotransform,
+                'scale_x': meta.raster_transform.geotransform['scaleX'],
+                'scale_y': meta.raster_transform.geotransform['scaleY'],
+                'image': meta.image,
+                'manifest': {
+                    meta._expression_key: meta.image,
+                    'fileFormat': 'GEO_TIFF',
+                    'bandIds': meta.bands, 
+                    'grid': { 
+                        'dimensions': {
+                            'width': meta.raster_transform.width,
+                            'height': meta.raster_transform.height
+                        },
+                        'affineTransform': meta.raster_transform.geotransform,
+                        'crsCode': meta.raster_transform.crs
+                    },
+                },
+                'outname': f'{meta.id}.tif'
+            } for index, meta in enumerate(self.requestset)
         ])
-    
+
+
     def __repr__(self) -> str:
         """
         Provides a string representation of the metadata set including a table of all entries.
@@ -287,8 +337,9 @@ class RasterTransformSet(BaseModel):
         Returns:
             str: A string representation of the entire RasterTransformSet.
         """
-        num_entries = len(self.rastertransformset)
+        num_entries = len(self.requestset)
         return f"RasterTransformSet({num_entries} entries)"
     
     def __str__(self):
         return super().__repr__()
+    

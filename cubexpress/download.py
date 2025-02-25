@@ -178,12 +178,9 @@ def getGeoTIFF(
     else:
         raise ValueError("Manifest does not contain 'assetId' or 'expression'")
 
-ee.Initialize(project="ee-julius013199")
-manifest_dict = {'assetId': 'NASA/NASADEM_HGT/001'}
-getGeoTIFF(manifest_dict, pathlib.Path('/output/image.tif'))
 
 def getcube(
-    table: pd.DataFrame,
+    request: pd.DataFrame,
     output_path: str | pathlib.Path,
     nworkers: Optional[int] = None,
     max_deep_level: Optional[int] = 5
@@ -200,7 +197,9 @@ def getcube(
 
     Returns:
         List[pathlib.Path]: List of paths to the downloaded images.
-    """    
+    """ 
+    # Get the table
+    table: pd.DataFrame = request._dataframe
     
     # Create the output directory if it doesn't exist
     output_path = pathlib.Path(output_path)
