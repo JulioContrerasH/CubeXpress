@@ -12,25 +12,34 @@ import json
 
 def check_not_found_error(error_message: str) -> bool:
     """
-    Check if the error message indicates that the image was not found.
+    Checks if the error message indicates that the image was not found.
     
     Args:
-        error_msg (str): The error message to check.
+        error_message (str): The error message to check.
         
     Returns:
         bool: True if the error message indicates "not found", False otherwise.
+    
+    Example:
+        >>> check_not_found_error("Total request size must be less than or equal to...")
+        True
     """
     return "Total request size" in error_message and "must be less than or equal to" in error_message
 
 def quadsplit_manifest(manifest: dict) -> list[dict]:
     """
-    Splits a manifest into four smaller manifests by dividing the grid dimensions.
-
+    Splits a manifest into four smaller ones by dividing the grid dimensions.
+    
     Args:
-        manifest (dict): The original manifest to be split.
-
+        manifest (dict): The original manifest to split.
+        
     Returns:
         List[dict]: A list of four smaller manifests with updated grid transformations.
+
+    Example:
+        >>> manifest = {'grid': {'dimensions': {'width': 100, 'height': 100}, 'affineTransform': {'scaleX': 0.1, 'scaleY': 0.1, 'translateX': 0, 'translateY': 0}}}
+        >>> quadsplit_manifest(manifest)
+        [{'grid': {'dimensions': {'width': 50, 'height': 50}, 'affineTransform': {'scaleX': 0.1, 'scaleY': 0.1, 'translateX': 0, 'translateY': 0}}}, {'grid': {'dimensions': {'width': 50, 'height': 50}, 'affineTransform': {'scaleX': 0.1, 'scaleY': 0.1, 'translateX': 5.0, 'translateY': 0}}}, ...]
     """
     manifest_copy = deepcopy(manifest)
     new_width = manifest["grid"]["dimensions"]["width"] // 2
@@ -70,12 +79,19 @@ def getGeoTIFFbatch(
     Fetches pixel data from Earth Engine using getPixels with recursion if needed.
 
     Args:
-        full_outname (str): The full path to the output file.
         manifest_dict (dict): The manifest containing image metadata.
+        full_outname (pathlib.Path): The full path to the output file.
         max_deep_level (Optional[int]): Maximum recursion depth.
+        method (Optional[str]): The method to use ('getPixels' or 'computePixels').
 
     Returns:
         Optional[np.ndarray]: The image as a numpy array or None if the download fails.
+    
+    Example:
+        >>> ee.Initialize()
+        >>> manifest_dict = {'assetId': 'NASA/NASADEM_HGT/001'}
+        >>> getGeoTIFFbatch(manifest_dict, pathlib.Path('/output/image.tif'))
+        PosixPath('/output/image.tif')
     """
     
     # Check if the maximum recursion depth has been reached
@@ -98,7 +114,7 @@ def getGeoTIFFbatch(
         # TODO: This is a workaround when the image is not found, as it is a message from the server
         # it is not possible to check the type of the exception    
         if not check_not_found_error(str(e)):
-            raise "Error downloading the GeoTIFF file from Earth Engine: %s" % e    
+            raise ValueError(f"Error downloading the GeoTIFF file from Earth Engine: {e}")   
 
         # Create the output directory if it doesn't exist
         child_folder: pathlib.Path = full_outname.parent / full_outname.stem
@@ -118,7 +134,6 @@ def getGeoTIFFbatch(
 
     return full_outname
 
-
 def getGeoTIFF(
     full_outname: pathlib.Path,
     manifest_dict: dict,
@@ -126,16 +141,21 @@ def getGeoTIFF(
 ) -> Optional[np.ndarray]:
     """
     Retrieves an image from Earth Engine using the appropriate method based on the manifest type.
-
+    
     Args:
+        full_outname (pathlib.Path): The full path to the output file.
         manifest_dict (dict): The manifest containing image metadata.
-        max_deep_level (Optional[int]): Maximum recursion depth for fetching the image.
-        quiet (Optional[bool]): If True, suppresses console output.
+        max_deep_level (Optional[int]): Maximum recursion depth.
 
     Returns:
         Optional[np.ndarray]: The image as a numpy array or None if the download fails.
+    
+    Example:
+        >>> ee.Initialize()
+        >>> manifest_dict = {'assetId': 'NASA/NASADEM_HGT/001'}
+        >>> getGeoTIFF(manifest_dict, pathlib.Path('/output/image.tif'))
+        PosixPath('/output/image.tif')
     """
-
     if 'assetId' in manifest_dict:
         return getGeoTIFFbatch(
             manifest_dict=manifest_dict,
@@ -158,6 +178,9 @@ def getGeoTIFF(
     else:
         raise ValueError("Manifest does not contain 'assetId' or 'expression'")
 
+ee.Initialize(project="ee-julius013199")
+manifest_dict = {'assetId': 'NASA/NASADEM_HGT/001'}
+getGeoTIFF(manifest_dict, pathlib.Path('/output/image.tif'))
 
 def getcube(
     table: pd.DataFrame,
