@@ -1,9 +1,8 @@
 from cubexpress.geotyping import RasterTransformSet
-import ee
-import re
 import pandas as pd
+import ee
 
-def dataframe_manifest(
+def getmanifest(
     geometadatas: RasterTransformSet,    
     image: str | ee.Image,
     bands: list[str],
@@ -30,14 +29,9 @@ def dataframe_manifest(
         >>> table_manifest = dataframe_manifest(metadata_set, bands, image)
     """
     if isinstance(image, ee.Image):
-        # Serialize the ee.Image expression
-        serialized_expression = image.serialize()
-        collection_str = re.findall(r'"constantValue":\s*"([^"]*)"', serialized_expression)[0]
+        serialized_expression = image.serialize()        
         expression_key = 'expression'
-
     else:
-        # Handle the case where expression is a string (assetId)
-        collection_str = image
         serialized_expression = image
         expression_key = 'assetId'
 
@@ -46,8 +40,7 @@ def dataframe_manifest(
         lambda df: pd.Series({
             'x': df.x,
             'y': df.y,
-            'crs': df.crs,
-            'image_id': collection_str,
+            'crs': df.crs,            
             'bands': bands,
             'width': df.width,
             'height': df.height,
@@ -66,7 +59,7 @@ def dataframe_manifest(
                     'crsCode': df.crs
                 },
             },
-            'outname': f"{collection_str.replace('/', '_')}__{df.name:04d}.tif" 
+            'outname': f"{df.id}.tif" 
         }), 
         axis=1
     )

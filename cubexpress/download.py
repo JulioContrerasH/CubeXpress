@@ -1,82 +1,170 @@
-from cubexpress.download_utils import image_from_manifest
-from typing import Optional, List, Union
 from concurrent.futures import ThreadPoolExecutor
-import pathlib
 import concurrent.futures
 import pandas as pd
-import gc
-import json
-import rasterio as rio
 
+from copy import deepcopy
+from typing import Optional
+
+import pathlib
 import numpy as np
-from PIL import Image
+import ee
+import json
 
-def getCube_batch(
-    row: pd.Series,
-    output_path: str,
-    max_deep_level: Optional[int] = 5,
-    quiet: Optional[bool] = False,
-) -> Optional[pathlib.Path]:
+def check_not_found_error(error_message: str) -> bool:
     """
-    Downloads and saves an image from a manifest entry.
+    Check if the error message indicates that the image was not found.
+    
+    Args:
+        error_msg (str): The error message to check.
+        
+    Returns:
+        bool: True if the error message indicates "not found", False otherwise.
+    """
+    return "Total request size" in error_message and "must be less than or equal to" in error_message
+
+def quadsplit_manifest(manifest: dict) -> list[dict]:
+    """
+    Splits a manifest into four smaller manifests by dividing the grid dimensions.
 
     Args:
-        row (pd.Series): A row containing the image manifest and metadata.
-        output_path (str): Directory where the image will be saved.
+        manifest (dict): The original manifest to be split.
+
+    Returns:
+        List[dict]: A list of four smaller manifests with updated grid transformations.
+    """
+    manifest_copy = deepcopy(manifest)
+    new_width = manifest["grid"]["dimensions"]["width"] // 2
+    new_height = manifest["grid"]["dimensions"]["height"] // 2
+    manifest_copy["grid"]["dimensions"]["width"] = new_width
+    manifest_copy["grid"]["dimensions"]["height"] = new_height
+
+    manifests = []
+    for idx in range(4):
+        new_manifest = deepcopy(manifest_copy)
+        res_x = manifest["grid"]["affineTransform"]["scaleX"]
+        res_y = manifest["grid"]["affineTransform"]["scaleY"]
+
+        add_x, add_y = (0, 0)
+        if idx == 1:
+            add_x = new_width * res_x
+        elif idx == 2:
+            add_y = new_height * res_y
+        elif idx == 3:
+            add_x = new_width * res_x
+            add_y = new_height * res_y
+
+        new_manifest["grid"]["affineTransform"]["translateX"] += add_x
+        new_manifest["grid"]["affineTransform"]["translateY"] += add_y
+
+        manifests.append(new_manifest)
+
+    return manifests
+
+def getGeoTIFFbatch(    
+    manifest_dict: dict,
+    full_outname: pathlib.Path,
+    max_deep_level: Optional[int] = 5,
+    method: Optional[str] = "getPixels" 
+) -> Optional[np.ndarray]:
+    """
+    Fetches pixel data from Earth Engine using getPixels with recursion if needed.
+
+    Args:
+        full_outname (str): The full path to the output file.
+        manifest_dict (dict): The manifest containing image metadata.
+        max_deep_level (Optional[int]): Maximum recursion depth.
+
+    Returns:
+        Optional[np.ndarray]: The image as a numpy array or None if the download fails.
+    """
+    
+    # Check if the maximum recursion depth has been reached
+    if max_deep_level == 0:
+        raise ValueError("Max recursion depth reached.")    
+
+    try:        
+        # Get the image bytes
+        if method == "getPixels":
+            image_bytes: bytes = ee.data.getPixels(manifest_dict)
+        elif method == "computePixels":
+            image_bytes: bytes = ee.data.computePixels(manifest_dict)
+        else:
+            raise ValueError("Method must be either 'getPixels' or 'computePixels'")
+        
+        # Write the image bytes to a file
+        with open(full_outname, "wb") as src:
+            src.write(image_bytes)    
+    except Exception as e:
+        # TODO: This is a workaround when the image is not found, as it is a message from the server
+        # it is not possible to check the type of the exception    
+        if not check_not_found_error(str(e)):
+            raise "Error downloading the GeoTIFF file from Earth Engine: %s" % e    
+
+        # Create the output directory if it doesn't exist
+        child_folder: pathlib.Path = full_outname.parent / full_outname.stem
+        pathlib.Path(child_folder).mkdir(parents=True, exist_ok=True)
+        
+        # Split the manifest into four smaller manifests
+        manifest_dicts = quadsplit_manifest(manifest_dict)
+
+        for idx, manifest_dict_batch in enumerate(manifest_dicts):
+            # Recursively download the image
+            getGeoTIFFbatch(
+                full_outname=child_folder/ ("%s__%02d.tif" % (full_outname.stem, idx)),
+                manifest_dict=manifest_dict_batch,
+                max_deep_level=max_deep_level - 1,
+                method=method
+            )
+
+    return full_outname
+
+
+def getGeoTIFF(
+    full_outname: pathlib.Path,
+    manifest_dict: dict,
+    max_deep_level: Optional[int] = 5    
+) -> Optional[np.ndarray]:
+    """
+    Retrieves an image from Earth Engine using the appropriate method based on the manifest type.
+
+    Args:
+        manifest_dict (dict): The manifest containing image metadata.
         max_deep_level (Optional[int]): Maximum recursion depth for fetching the image.
         quiet (Optional[bool]): If True, suppresses console output.
 
     Returns:
-        Optional[pathlib.Path]: The path to the saved image, or None if download fails.
+        Optional[np.ndarray]: The image as a numpy array or None if the download fails.
     """
-    if not quiet:
-        print(f"Downloading {row.outname}...")
 
-    manifest_dict = json.loads(row.manifest) if isinstance(row.manifest, str) else row.manifest
+    if 'assetId' in manifest_dict:
+        return getGeoTIFFbatch(
+            manifest_dict=manifest_dict,
+            full_outname=full_outname,
+            max_deep_level=max_deep_level,
+            method="getPixels"
+        )
+    elif 'expression' in manifest_dict:
+        # From a string to a ee.Image object        
+        manifest_dict["expression"] = ee.deserializer.decode(
+            json.loads(manifest_dict["expression"])
+        )
 
-    data_np = image_from_manifest(
-        manifest_dict=manifest_dict,
-        max_deep_level=max_deep_level,
-        quiet=quiet
-    )
-    
-    if data_np is None:
-        return None
-
-    outfile = pathlib.Path(output_path) / row.outname
-    outfile.parent.mkdir(parents=True, exist_ok=True)
-    
-    metadata_rio = {
-        "driver": "GTiff",  
-        "count": data_np.shape[0],
-        "dtype": data_np.dtype,
-        "height": int(manifest_dict["grid"]["dimensions"]["height"]),
-        "width": int(manifest_dict["grid"]["dimensions"]["width"]),
-        "transform": rio.Affine(
-            manifest_dict["grid"]["affineTransform"]["scaleX"],
-            manifest_dict["grid"]["affineTransform"]["shearX"],
-            manifest_dict["grid"]["affineTransform"]["translateX"],
-            manifest_dict["grid"]["affineTransform"]["shearY"],
-            manifest_dict["grid"]["affineTransform"]["scaleY"],
-            manifest_dict["grid"]["affineTransform"]["translateY"]
-        ),
-        "crs": manifest_dict["grid"]["crsCode"],
-    }
-
-    with rio.open(outfile, "w", **metadata_rio) as dst:
-        dst.write(data_np)
+        return getGeoTIFFbatch(
+            manifest_dict=manifest_dict, 
+            full_outname=full_outname,
+            max_deep_level=max_deep_level,
+            method="computePixels"
+        )
+    else:
+        raise ValueError("Manifest does not contain 'assetId' or 'expression'")
 
 
-    gc.collect()
-    return outfile
-
-def getCube(
+def getcube(
     table: pd.DataFrame,
+    output_path: str | pathlib.Path,
     nworkers: Optional[int] = None,
-    deep_level: Optional[int] = 5,
-    output_path: Union[str, pathlib.Path, None] = None,
-    quiet: bool = False
-) -> List[pathlib.Path]:
+    max_deep_level: Optional[int] = 5
+) -> list[pathlib.Path]:
     """
     Processes a table of image manifests and downloads them in parallel.
 
@@ -89,36 +177,25 @@ def getCube(
 
     Returns:
         List[pathlib.Path]: List of paths to the downloaded images.
-    """
-    if output_path is None:
-        output_path = pathlib.Path(table.iloc[0].image_id.replace("/", "_"))
+    """    
+    
+    # Create the output directory if it doesn't exist
     output_path = pathlib.Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
     results = []
-
-    if nworkers is None:
-        for _, row in table.iterrows():
-            result = getCube_batch(
-                row=row, 
-                output_path=output_path,
-                max_deep_level=deep_level, 
-                quiet=quiet
-            )
-            if result:
-                results.append(result)
-    else:
-        with ThreadPoolExecutor(max_workers=nworkers) as executor:
-            futures = {
-                executor.submit(getCube_batch, row, output_path, deep_level, quiet): row
-                for _, row in table.iterrows()
-            }
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    result = future.result()
-                    if result:
-                        results.append(result)
-                except Exception as e:
-                    print(f"Error processing {futures[future].outname}: {e}")
+    with ThreadPoolExecutor(max_workers=nworkers) as executor:
+        futures = {
+            executor.submit(getGeoTIFF, output_path / row.outname, row.manifest, max_deep_level): row
+            for _, row in table.iterrows()
+        }
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()
+                if result:
+                    results.append(result)
+            except Exception as e:
+                # TODO add this into the log
+                print(f"Error processing {futures[future].outname}: {e}")
 
     return results
