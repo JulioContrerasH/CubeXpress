@@ -26,6 +26,7 @@ def check_not_found_error(error_message: str) -> bool:
     """
     return "Total request size" in error_message and "must be less than or equal to" in error_message
 
+
 def quadsplit_manifest(manifest: dict) -> list[dict]:
     """
     Splits a manifest into four smaller ones by dividing the grid dimensions.
@@ -76,22 +77,47 @@ def getGeoTIFFbatch(
     method: Optional[str] = "getPixels" 
 ) -> Optional[np.ndarray]:
     """
-    Fetches pixel data from Earth Engine using getPixels with recursion if needed.
+    Downloads a GeoTIFF image from Google Earth Engine using getPixels or computePixels.
+    If the requested area exceeds the size limit, the image is recursively split into
+    smaller tiles until the download succeeds or the maximum recursion depth is reached.
 
     Args:
-        manifest_dict (dict): The manifest containing image metadata.
-        full_outname (pathlib.Path): The full path to the output file.
-        max_deep_level (Optional[int]): Maximum recursion depth.
-        method (Optional[str]): The method to use ('getPixels' or 'computePixels').
+        manifest_dict (dict): Dictionary containing image metadata, including grid 
+            dimensions, affine transformations, and asset ID or expression.
+        full_outname (pathlib.Path): Full path where the downloaded GeoTIFF will be saved.
+        max_deep_level (Optional[int]): Maximum recursion depth for splitting large requests. 
+            Defaults to 5.
+        method (Optional[str]): Method for retrieving image data. Can be 'getPixels' for 
+            asset-based requests or 'computePixels' for expressions. Defaults to 'getPixels'.
 
     Returns:
-        Optional[np.ndarray]: The image as a numpy array or None if the download fails.
+        Optional[pathlib.Path]: Path to the downloaded GeoTIFF file, or None if the download fails.
     
     Example:
+        >>> import ee
+        >>> import pathlib
         >>> ee.Initialize()
-        >>> manifest_dict = {'assetId': 'NASA/NASADEM_HGT/001'}
-        >>> getGeoTIFFbatch(manifest_dict, pathlib.Path('/output/image.tif'))
-        PosixPath('/output/image.tif')
+
+        >>> manifest_dict = {
+        ...     "assetId": "NASA/NASADEM_HGT/001",
+        ...     "fileFormat": "GEO_TIFF",
+        ...     'bandIds': ["elevation"],
+        ...     "grid": {
+        ...         "dimensions": {"width": 5000, "height": 5000},
+        ...         "affineTransform": {
+        ...             "scaleX": 10,
+        ...             "shearX": 0,
+        ...             "translateX": 329583.7418991233,
+        ...             "scaleY": -10,
+        ...             "shearY": 0,
+        ...             "translateY": 8955272.65902687
+        ...         },
+        ...         "crsCode": "EPSG:32718"
+        ...     }
+        ... }
+
+        >>> getGeoTIFFbatch(manifest_dict, pathlib.Path('output/image.tif'))
+        PosixPath('output/image.tif')
     """
     
     # Check if the maximum recursion depth has been reached
@@ -133,6 +159,7 @@ def getGeoTIFFbatch(
             )
 
     return full_outname
+
 
 def getGeoTIFF(
     full_outname: pathlib.Path,
