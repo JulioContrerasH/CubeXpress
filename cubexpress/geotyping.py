@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor
 from typing import List, Set, TypeAlias, Final
 from typing_extensions import TypedDict
 
 import pandas as pd
 from pydantic import BaseModel, field_validator, model_validator, model_validator
-from pyproj import CRS
+from pyproj import CRS, Transformer
 
 # Type definitions
 NumberType: TypeAlias = int | float
@@ -15,6 +16,57 @@ REQUIRED_KEYS: Final[Set[str]] = {
     'scaleX', 'shearX', 'translateX',
     'scaleY', 'shearY', 'translateY'
 }
+
+
+def get_transformer(source_crs_wkt: str) -> Transformer:
+    """Get cached transformer from source CRS to WGS84 (EPSG:4326)"""
+    target_crs = CRS.from_epsg(4326)
+    return Transformer.from_crs(
+        CRS.from_wkt(source_crs_wkt),
+        target_crs,
+        always_xy=True  # Ensures consistent x,y order
+    )
+
+
+def rt2lonlat(raster: 'RasterTransform') -> tuple[float, float]:
+    """
+    Calculate the geographic centroid in WGS84 with optimized performance.
+    
+    Args:
+        raster: RasterTransform instance with geospatial metadata
+        
+    Returns:
+        Tuple of (longitude, latitude) in WGS84 coordinates
+    """
+    # Calculate pixel coordinates of raster center
+    col_center = (raster.width - 1) / 2.0
+    row_center = (raster.height - 1) / 2.0
+
+    # Extract geotransform parameters as local variables for faster access
+    gt = raster.geotransform
+    tx = gt['translateX']
+    sx = gt['scaleX']
+    shx = gt['shearX']
+    ty = gt['translateY']
+    shy = gt['shearY']
+    sy = gt['scaleY']
+
+    # Apply affine transformation
+    x = tx + sx * col_center + shx * row_center
+    y = ty + shy * col_center + sy * row_center
+
+    # Check if transformation is needed
+    source_crs = CRS.from_user_input(raster.crs)
+    target_crs = CRS.from_epsg(4326)
+    
+    if source_crs == target_crs:
+        return (x, y)
+
+    # Perform the transformation
+    transformer = get_transformer(source_crs.to_wkt())
+    lon, lat = transformer.transform(x, y)
+
+    return lon, lat, x, y
 
 class GeotransformDict(TypedDict):
     """
@@ -141,6 +193,7 @@ class RasterTransform(BaseModel):
         geotransform_df = pd.DataFrame(geotransform_data)
         return f"RasterTransform(crs={self.crs}, width={self.width}, height={self.height})\n\nGeotransform:\n{geotransform_df}"
 
+
 class RasterTransformSet(BaseModel):
     """
     Container for multiple RasterTransform instances with bulk validation capabilities.
@@ -153,6 +206,9 @@ class RasterTransformSet(BaseModel):
         >>> df = metadatas.export_df()
     """
     rastertransformset: List[RasterTransform]
+    same_coordinates: bool = False
+    same_image: bool = False
+    same_crs: bool = False
     
     @model_validator(mode="after")
     def validate_crs(self) -> RasterTransformSet:
@@ -182,6 +238,11 @@ class RasterTransformSet(BaseModel):
         if len(ids) != len(self.rastertransformset):
             raise ValueError("All entries must have unique IDs")
 
+        # Upgrade same_crss to True if all CRS are the same
+        self.same_crs = len(validated_crs) == 1
+
+        # Upgrade same_coordinates to True if all coordinates are the same
+        
         return self
     
     def export_df(self) -> pd.DataFrame:
@@ -195,26 +256,39 @@ class RasterTransformSet(BaseModel):
             >>> df = raster_transform_set.export_df()
             >>> print(df)
         """
+        # Use ProcessPoolExecutor for CPU-bound tasks
+        with ProcessPoolExecutor(max_workers=None) as executor:
+            # Submit all tasks to the executor
+            futures = [executor.submit(rt2lonlat, rt) for rt in self.rastertransformset]
+            
+            # Collect results as they complete
+            points = [future.result() for future in futures]                
+            lon, lat, x, y = zip(*points)
+
         return pd.DataFrame([
             {   
                 'id': meta.id,
-                'x': meta.geotransform['translateX'],
-                'y': meta.geotransform['translateY'],
+                'lon': lon[index],
+                'lat': lat[index],
+                'x': x[index],
+                'y': y[index],
                 'crs': meta.crs,
                 'width': meta.width,
                 'height': meta.height,
                 'geotransform': meta.geotransform
             }
-            for meta in self.rastertransformset
+            for index, meta in enumerate(self.rastertransformset)
         ])
     
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         """
         Provides a string representation of the metadata set including a table of all entries.
 
         Returns:
             str: A string representation of the entire RasterTransformSet.
         """
-        df = self.export_df()
         num_entries = len(self.rastertransformset)
-        return f"RasterTransformSet({num_entries} entries)\n\n{df}"
+        return f"RasterTransformSet({num_entries} entries)"
+    
+    def __str__(self):
+        return super().__repr__()

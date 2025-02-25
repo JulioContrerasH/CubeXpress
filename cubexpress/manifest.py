@@ -38,6 +38,8 @@ def getmanifest(
     # Create the DataFrame manifest from the geospatial metadata
     df_manifest = geometadatas.export_df().reset_index().apply(
         lambda df: pd.Series({
+            'lon': df.lon,
+            'lat': df.lat,
             'x': df.x,
             'y': df.y,
             'crs': df.crs,            

@@ -1,4 +1,4 @@
-from cubexpress.user_utils import lonlat2rt
+from cubexpress.conversion import lonlat2rt
 from cubexpress.geotyping import RasterTransform, RasterTransformSet
 from cubexpress.download import getcube
 from cubexpress.manifest import getmanifest
