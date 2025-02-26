@@ -1,54 +1,82 @@
-site_name: CubeXpress
-repo_url: https://github.com/JulioContrerasH/CubeXpress
-site_url: https://JulioContrerasH.github.io/CubeXpress
-site_description: This is a template repository for Python projects that use Poetry for their dependency management.
-site_author: Julio Contreras
-edit_uri: edit/main/docs/
-repo_name: JulioContrerasH/CubeXpress
-copyright: Maintained by <a href="https://JulioContrerasH.com">Florian</a>.
+docs_dir: .
 
-nav:
-  - Home: index.md
-  - Modules: modules.md
-plugins:
-  - search
-  - mkdocstrings:
-      handlers:
-        python:
-          setup_commands:
-            - import sys
-            - sys.path.append('../')
+# Project information
+site_name: CubeXpress
+site_url: https://juliocontrerash.github.io/cubexpress/
+site_author: IPL-UV
+site_description: A Python package for efficient processing of cubic earth observation (EO) data.
+
+
+# Repository
+repo_url: https://github.com/juliocontrerash/cubexpress/
+repo_name: cubexpress
+use_directory_urls: false
+
+# Configuration
 theme:
   name: material
-  feature:
-    tabs: true
+  language: en
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: white
-      accent: deep orange
+    - scheme: default
+      primary: '#d49f0c'
+      accent: '#d49f0c'
       toggle:
-        icon: material/brightness-7
+        icon: material/toggle-switch-off-outline
         name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: black
-      accent: deep orange
+    - scheme: slate
+      primary: '#201357'
+      accent: white
       toggle:
-        icon: material/brightness-4
+        icon: material/toggle-switch
         name: Switch to light mode
-  icon:
-    repo: fontawesome/brands/github
+  font:
+    text: Roboto
+    code: Roboto Mono
+  logo: ./docs/images/logo_cubexpress.png
+  favicon: ./docs/images/logo_cubexpress.png
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.top
+    - navigation.expand
+    - navigation.indexes
+    - header.autohide   
 
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/JulioContrerasH/CubeXpress
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/CubeXpress
+
+extra_css:
+  - ./docs/style.css
+
+# Page tree
+nav:
+  - Home: 
+    - README.md
+    - Contributing: CONTRIBUTING.md
+    - Changelog: CHANGELOG.md
+    - Code of conduct: CODE_OF_CONDUCT.md
+  - Functions: 
+    - ./docs/functions.md
+  - Processes: 
+    - ./docs/process.md
+  - eeFunctions:
+    - ./docs/COMPARATION.md
+    - Get: ./docs/Comparation/eedatagetPixels.md
+    - Compute: ./docs/Comparation/eedatacomputePixels.md
+    - Comparison: ./docs/Comparation/comparison.md
+    - Conclusion: ./docs/Comparation/conclusion.md
+
+# Plugins
+plugins:
+  - search
+  - same-dir
+  - mkdocstrings 
+  - awesome-pages
 
 markdown_extensions:
-  - toc:
-      permalink: true
-  - pymdownx.arithmatex:
-      generic: true
+  - meta
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.pathconverter
+  - pymdownx.tabbed
+  - mdx_truly_sane_lists
+  - pymdownx.tasklist

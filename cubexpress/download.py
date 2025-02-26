@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from cubexpress.geotyping import RequestSet
 import concurrent.futures
 import pandas as pd
 
@@ -9,6 +10,7 @@ import pathlib
 import numpy as np
 import ee
 import json
+
 
 def check_not_found_error(error_message: str) -> bool:
     """
@@ -70,6 +72,7 @@ def quadsplit_manifest(manifest: dict) -> list[dict]:
 
     return manifests
 
+
 def getGeoTIFFbatch(    
     manifest_dict: dict,
     full_outname: pathlib.Path,
@@ -77,47 +80,51 @@ def getGeoTIFFbatch(
     method: Optional[str] = "getPixels" 
 ) -> Optional[np.ndarray]:
     """
-    Downloads a GeoTIFF image from Google Earth Engine using getPixels or computePixels.
-    If the requested area exceeds the size limit, the image is recursively split into
-    smaller tiles until the download succeeds or the maximum recursion depth is reached.
+    Downloads a GeoTIFF image from Google Earth Engine using either the `getPixels` or `computePixels` method.
+    If the requested area exceeds the size limit, the image is recursively split into smaller tiles until the 
+    download succeeds or the maximum recursion depth is reached.
 
     Args:
-        manifest_dict (dict): Dictionary containing image metadata, including grid 
-            dimensions, affine transformations, and asset ID or expression.
-        full_outname (pathlib.Path): Full path where the downloaded GeoTIFF will be saved.
-        max_deep_level (Optional[int]): Maximum recursion depth for splitting large requests. 
-            Defaults to 5.
-        method (Optional[str]): Method for retrieving image data. Can be 'getPixels' for 
-            asset-based requests or 'computePixels' for expressions. Defaults to 'getPixels'.
+        manifest_dict (dict): A dictionary containing image metadata, including grid dimensions, affine transformations,
+                              and either an `assetId` or `expression` for the image source.
+        full_outname (pathlib.Path): The full path where the downloaded GeoTIFF file will be saved.
+        max_deep_level (Optional[int]): Maximum recursion depth for splitting large requests. Defaults to 5.
+        method (Optional[str]): Method for retrieving image data. Can be 'getPixels' for asset-based requests or 
+                                'computePixels' for expressions. Defaults to 'getPixels'.
 
     Returns:
-        Optional[pathlib.Path]: Path to the downloaded GeoTIFF file, or None if the download fails.
+        Optional[pathlib.Path]: The path to the downloaded GeoTIFF file. Returns `None` if the download fails.
+
+    Raises:
+        ValueError: If the method is not 'getPixels' or 'computePixels', or if the image cannot be found.
     
     Example:
         >>> import ee
         >>> import pathlib
         >>> ee.Initialize()
-
         >>> manifest_dict = {
-        ...     "assetId": "NASA/NASADEM_HGT/001",
+        ...     "assetId": "COPERNICUS/S2_HARMONIZED/20160816T153912_20160816T154443_T18TYN",
         ...     "fileFormat": "GEO_TIFF",
-        ...     'bandIds': ["elevation"],
+        ...     "bandIds": ["B4", "B3", "B2"],
         ...     "grid": {
-        ...         "dimensions": {"width": 5000, "height": 5000},
-        ...         "affineTransform": {
-        ...             "scaleX": 10,
-        ...             "shearX": 0,
-        ...             "translateX": 329583.7418991233,
-        ...             "scaleY": -10,
-        ...             "shearY": 0,
-        ...             "translateY": 8955272.65902687
+        ...         "dimensions": {
+        ...             "width": 512, 
+        ...             "height": 512
         ...         },
-        ...         "crsCode": "EPSG:32718"
+        ...         "affineTransform": {
+        ...             "scaleX": 10, 
+        ...             "shearX": 0, 
+        ...             "translateX": 725260.108545126, 
+        ...             "scaleY": -10, 
+        ...             "shearY": 0, 
+        ...             "translateY": 4701550.38712196
+        ...         },
+        ...         "crsCode": "EPSG:32618"
         ...     }
         ... }
 
-        >>> getGeoTIFFbatch(manifest_dict, pathlib.Path('output/image.tif'))
-        PosixPath('output/image.tif')
+        >>> getGeoTIFFbatch(manifest_dict pathlib.Path('output/sentinel_image.tif'))
+        PosixPath('output/sentinel_image.tif')
     """
     
     # Check if the maximum recursion depth has been reached
@@ -162,26 +169,82 @@ def getGeoTIFFbatch(
 
 
 def getGeoTIFF(
-    full_outname: pathlib.Path,
     manifest_dict: dict,
+    full_outname: pathlib.Path,
     max_deep_level: Optional[int] = 5    
 ) -> Optional[np.ndarray]:
     """
     Retrieves an image from Earth Engine using the appropriate method based on the manifest type.
     
+    This function downloads a GeoTIFF image from Google Earth Engine (GEE). Depending on the content of 
+    the provided manifest (`manifest_dict`), the function will either use the `getPixels` method (for 
+    asset-based requests) or the `computePixels` method (for expressions). If the requested area exceeds 
+    the size limit, the image will be recursively split into smaller tiles until the download succeeds or 
+    the maximum recursion depth is reached.
+
     Args:
-        full_outname (pathlib.Path): The full path to the output file.
-        manifest_dict (dict): The manifest containing image metadata.
-        max_deep_level (Optional[int]): Maximum recursion depth.
+        manifest_dict (dict): A dictionary containing the image metadata. This should include either:
+            - `assetId`: The identifier of a GEE asset (e.g., satellite imagery).
+            - `expression`: A serialized string representing a GEE image expression (e.g., an image computation).
+            Additionally, the manifest should include grid information such as the image dimensions and affine transformations.
+        
+        full_outname (pathlib.Path): The full path where the downloaded GeoTIFF file will be saved.
+
+        max_deep_level (Optional[int]): The maximum recursion depth for splitting large requests into smaller tiles if needed. 
+            Defaults to 5.
 
     Returns:
-        Optional[np.ndarray]: The image as a numpy array or None if the download fails.
-    
-    Example:
+        Optional[np.ndarray]: The downloaded image as a `numpy` array, or `None` if the download fails. It will 
+            also return the full file path to the saved GeoTIFF image.
+
+    Raises:
+        ValueError: If the manifest does not contain either an `assetId` or `expression`, or if there is an error during download.
+
+    Example 1: Downloading an image using an `assetId`:
+        >>> import ee
+        >>> import pathlib
         >>> ee.Initialize()
-        >>> manifest_dict = {'assetId': 'NASA/NASADEM_HGT/001'}
-        >>> getGeoTIFF(manifest_dict, pathlib.Path('/output/image.tif'))
-        PosixPath('/output/image.tif')
+        >>> manifest_dict = {
+        ...     "assetId": "COPERNICUS/S2_HARMONIZED/20160816T153912_20160816T154443_T18TYN",
+        ...     "fileFormat": "GEO_TIFF",
+        ...     "bandIds": ["B4", "B3", "B2"],
+        ...     "grid": {
+        ...         "dimensions": {"width": 512, "height": 512},
+        ...         "affineTransform": {
+        ...             "scaleX": 10, 
+        ...             "shearX": 0, 
+        ...             "translateX": 725260.108545126, 
+        ...             "scaleY": -10, 
+        ...             "shearY": 0, 
+        ...             "translateY": 4701550.38712196
+        ...         },
+        ...         "crsCode": "EPSG:32618"
+        ...     }
+        ... }
+        >>> getGeoTIFF(manifest_dict, pathlib.Path('output/sentinel_image.tif'))
+        PosixPath('output/sentinel_image.tif')
+
+    Example 2: Downloading an image using an `expression`:
+        >>> image = ee.Image("COPERNICUS/S2_HARMONIZED/20160816T153912_20160816T154443_T18TYN").divide(10_000).select(["B4", "B3", "B2"])
+        >>> expression = image.serialize()
+        >>> manifest_dict = {
+        ...     "expression": expression,
+        ...     "fileFormat": "GEO_TIFF",
+        ...     "grid": {
+        ...         "dimensions": {"width": 512, "height": 512},
+        ...         "affineTransform": {
+        ...             "scaleX": 10, 
+        ...             "shearX": 0, 
+        ...             "translateX": 725260.108545126, 
+        ...             "scaleY": -10, 
+        ...             "shearY": 0, 
+        ...             "translateY": 4701550.38712196
+        ...         },
+        ...         "crsCode": "EPSG:32618"
+        ...     }
+        ... }
+        >>> getGeoTIFF(manifest_dict, pathlib.Path('output/expression_image.tif'))
+        PosixPath('output/expression_image.tif')
     """
     if 'assetId' in manifest_dict:
         return getGeoTIFFbatch(
@@ -191,10 +254,11 @@ def getGeoTIFF(
             method="getPixels"
         )
     elif 'expression' in manifest_dict:
-        # From a string to a ee.Image object        
-        manifest_dict["expression"] = ee.deserializer.decode(
-            json.loads(manifest_dict["expression"])
-        )
+        if isinstance(manifest_dict["expression"], str): # Decode only if the expression is still a string.
+            # From a string to a ee.Image object        
+            manifest_dict["expression"] = ee.deserializer.decode(
+                json.loads(manifest_dict["expression"])
+            )
 
         return getGeoTIFFbatch(
             manifest_dict=manifest_dict, 
@@ -207,24 +271,37 @@ def getGeoTIFF(
 
 
 def getcube(
-    request: pd.DataFrame,
+    request: RequestSet,
     output_path: str | pathlib.Path,
     nworkers: Optional[int] = None,
     max_deep_level: Optional[int] = 5
 ) -> list[pathlib.Path]:
     """
-    Processes a table of image manifests and downloads them in parallel.
+    Downloads multiple GeoTIFF images in parallel from Google Earth Engine (GEE) based on the provided request set.
 
     Args:
-        table (pd.DataFrame): DataFrame containing image manifests.
-        nworkers (Optional[int]): Number of parallel workers. If None, runs sequentially.
-        deep_level (Optional[int]): Maximum recursion depth for fetching images.
-        output_path (Union[str, pathlib.Path, None]): Directory where images will be saved.
-        quiet (bool): If True, suppresses console output.
+        request (RequestSet): A collection of image requests containing metadata and processing parameters.
+        output_path (Union[str, pathlib.Path]): Directory where the downloaded images will be saved.
+        nworkers (Optional[int], default=None): Number of parallel threads. If None, runs sequentially.
+        max_deep_level (Optional[int], default=5): Maximum recursion depth for image subdivision if exceeding GEE limits.
 
     Returns:
-        List[pathlib.Path]: List of paths to the downloaded images.
-    """ 
+        List[pathlib.Path]: List of paths to the downloaded GeoTIFF files.
+
+    Example:
+        >>> import ee, cubexpress
+        >>> ee.Initialize()
+        >>> point = ee.Geometry.Point([-97.59, 33.37])
+        >>> collection = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
+        ...                 .filterBounds(point) \
+        ...                 .filterDate('2024-01-01', '2024-01-31')
+        >>> image_ids = collection.aggregate_array('system:id').getInfo()
+        >>> geotransform = cubexpress.lonlat2rt(lon=-97.59, lat=33.37, edge_size=128, scale=10)
+        >>> requests = [cubexpress.Request(id=f"s2_{i}", raster_transform=geotransform, bands=["B4", "B3", "B2"], image=ee.Image(img_id)) for i, img_id in enumerate(image_ids)]
+        >>> cube_requests = cubexpress.RequestSet(requestset=requests)
+        >>> cubexpress.getcube(request=cube_requests, nworkers=4, output_path="output", max_deep_level=5)
+        [PosixPath('output/s2_0.tif'), PosixPath('output/s2_1.tif'), ...]
+    """   
     # Get the table
     table: pd.DataFrame = request._dataframe
     
@@ -235,7 +312,7 @@ def getcube(
     results = []
     with ThreadPoolExecutor(max_workers=nworkers) as executor:
         futures = {
-            executor.submit(getGeoTIFF, output_path / row.outname, row.manifest, max_deep_level): row
+            executor.submit(getGeoTIFF, row.manifest, output_path / row.outname, max_deep_level): row
             for _, row in table.iterrows()
         }
         for future in concurrent.futures.as_completed(futures):
@@ -248,3 +325,6 @@ def getcube(
                 print(f"Error processing {futures[future].outname}: {e}")
 
     return results
+
+
+

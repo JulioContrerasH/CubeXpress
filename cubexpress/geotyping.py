@@ -205,12 +205,16 @@ class Request(BaseModel):
     
     @model_validator(mode="after")
     def validate_image(self):
+        
         if isinstance(self.image, ee.Image):
             self.image = self.image.serialize()
-            self._expression_key = 'assetId'
+            self._expression_key = 'expression'
+        # to avoid reading serialization of an ee.Image as str in RequestSet
+        elif isinstance(self.image, str) and self.image.strip().startswith("{"):
+            self._expression_key = 'expression'
         else:
             self.image = self.image
-            self._expression_key = 'expression'
+            self._expression_key = 'assetId'
 
         return self
 
@@ -229,9 +233,6 @@ class RequestSet(BaseModel):
     """
     requestset: List[Request]
     _dataframe: Any = None
-    _same_coordinates: bool = False
-    _same_ee_images: bool = False
-    _same_crs: bool = False
     
     @model_validator(mode="after")
     def validate_metadata(self) -> RequestSet:
@@ -261,19 +262,8 @@ class RequestSet(BaseModel):
         if len(ids) != len(self.requestset):
             raise ValueError("All entries must have unique IDs")
 
-        # Upgrade same_crss to True if all CRS are the same
-        self._same_crs = len(validated_crs) == 1
-
         # Upgrade same_coordinates to True if all coordinates are the same
         self._dataframe = self.create_manifests()
-
-        # Check if all coordinates are the same
-        if self._dataframe[['lon', 'lat']].nunique().eq(1).all():
-            self._same_coordinates = True
-
-        # Check if all EE images (meta._expression_key) are the same
-        if self._dataframe["image"].nunique() == 1:
-            self._same_ee_images = True
         
         return self
 
@@ -311,7 +301,6 @@ class RequestSet(BaseModel):
                 'geotransform': meta.raster_transform.geotransform,
                 'scale_x': meta.raster_transform.geotransform['scaleX'],
                 'scale_y': meta.raster_transform.geotransform['scaleY'],
-                'image': meta.image,
                 'manifest': {
                     meta._expression_key: meta.image,
                     'fileFormat': 'GEO_TIFF',
