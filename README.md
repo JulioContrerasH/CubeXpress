@@ -1,6 +1,6 @@
 # 
 <p align="center">
-  <img src="./docs/images/logo_cubexpress.png" width="39%">
+  <img src="./docs/logo_cubexpress.png" width="39%">
 </p>
 
 <p align="center">

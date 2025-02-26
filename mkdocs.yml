@@ -32,8 +32,8 @@ theme:
   font:
     text: Roboto
     code: Roboto Mono
-  logo: ./docs/images/logo_cubexpress.png
-  favicon: ./docs/images/logo_cubexpress.png
+  logo: ./docs/logo_cubexpress.png
+  favicon: ./docs/logo_cubexpress.png
   features:
     - navigation.instant
     - navigation.tabs
