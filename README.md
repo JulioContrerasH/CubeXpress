@@ -281,4 +281,3 @@ This project is licensed under the [MIT License](https://opensource.org/licenses
 <p align="center">
   Built with 🌎 and ❤️ by the <strong>CubeXpress</strong> team
 </p>
-```
