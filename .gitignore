@@ -1,5 +1,7 @@
 docs/source
 output/
+demo.py
+demo2.py
 borrador/
 # From https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore
 
