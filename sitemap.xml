@@ -2,82 +2,92 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/index.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://juliocontrerash.github.io/cubexpress/CHANGELOG.html</loc>
+         <lastmod>2025-02-28</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://juliocontrerash.github.io/cubexpress/CODE_OF_CONDUCT.html</loc>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/CONTRIBUTING.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/COMPARATION.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/functions.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/process.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Comparation/comparison.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Comparation/conclusion.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Comparation/eedatacomputePixels.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Comparation/eedatagetPixels.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Functions/download_data.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Functions/process_image.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Functions/query_metadata.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Process/concurrency.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Process/difference.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Process/parallelism.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://juliocontrerash.github.io/cubexpress/docs/Process/recursion.html</loc>
-         <lastmod>2025-02-26</lastmod>
+         <lastmod>2025-02-28</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>

@@ -73,7 +73,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#_1" class="md-skip">
+        <a href="#overview" class="md-skip">
           Skip to content
         </a>
       
@@ -375,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="CHANGELOG.md" class="md-nav__link">
+      <a href="CHANGELOG.html" class="md-nav__link">
         Changelog
       </a>
     </li>
@@ -389,7 +389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="CODE_OF_CONDUCT.md" class="md-nav__link">
+      <a href="CODE_OF_CONDUCT.html" class="md-nav__link">
         Code of conduct
       </a>
     </li>
@@ -442,7 +442,7 @@
   
     <li class="md-nav__item">
       <a href="docs/functions.html" class="md-nav__link">
-        Functions in **CubeXpress**
+        **Main Classes and Functions**
       </a>
     </li>
   
@@ -494,7 +494,7 @@
   
     <li class="md-nav__item">
       <a href="docs/process.html" class="md-nav__link">
-        Recursion, Concurrency, and Parallelism in **CubeXpress**
+        Process
       </a>
     </li>
   
@@ -595,7 +595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="docs/Comparation/comparison.html" class="md-nav__link">
+      <a href="docs/Comparation/comparision.md" class="md-nav__link">
         Comparison
       </a>
     </li>
@@ -640,8 +640,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -651,21 +649,21 @@
       
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
-    Overview 📊
+    Overview
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#key-features" class="md-nav__link">
-    Key Features ✨
+    Key Features
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
-    Installation ⚙️
+    Installation
   </a>
   
 </li>
@@ -725,13 +723,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#contributing" class="md-nav__link">
-    Contributing
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#license" class="md-nav__link">
     License
   </a>
@@ -756,7 +747,8 @@
 
 
 
-<h1 id="_1"></h1>
+<h1></h1>
+
 <p align="center">
   <img src="./docs/logo_cubexpress.png" width="39%">
 </p>
@@ -784,9 +776,9 @@
 <p><strong>GitHub</strong>: <a href="https://github.com/juliocontrerash/cubexpress/">https://github.com/juliocontrerash/cubexpress/</a> 🌐</p>
 <p><strong>PyPI</strong>: <a href="https://pypi.org/project/cubexpress/">https://pypi.org/project/cubexpress/</a> 🛠️</p>
 <hr />
-<h2 id="overview"><strong>Overview 📊</strong></h2>
+<h2 id="overview"><strong>Overview</strong></h2>
 <p><strong>CubeXpress</strong> is a Python package designed to <strong>simplify and accelerate</strong> the process of working with Google Earth Engine (GEE) data cubes. With features like multi-threaded downloads, automatic subdivision of large requests, and direct pixel-level computations on GEE, <strong>CubeXpress</strong> helps you handle massive datasets with ease.</p>
-<h2 id="key-features"><strong>Key Features ✨</strong></h2>
+<h2 id="key-features"><strong>Key Features</strong></h2>
 <ul>
 <li><strong>Fast Image and Collection Downloads</strong><br />
   Retrieve single images or entire collections at once, taking advantage of multi-threaded requests.</li>
@@ -797,7 +789,7 @@
 <li><strong>Scalable &amp; Efficient</strong><br />
   Optimized memory usage and parallelism let you handle complex tasks in big data environments.</li>
 </ul>
-<h2 id="installation"><strong>Installation ⚙️</strong></h2>
+<h2 id="installation"><strong>Installation</strong></h2>
 <p>Install the latest version from PyPI:</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>cubexpress
 </code></pre></div>
@@ -987,15 +979,15 @@
 
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Downloaded files:&quot;</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span>
 </code></pre></div>
-<p><strong>How it works</strong>:<br />
-1. <strong>Points:</strong> We define multiple coordinates in <code>points</code>.<br />
-2. <strong>Global collection:</strong> We retrieve a broad Sentinel-2 collection covering the desired date range.<br />
-3. <strong>Per-point filter:</strong> For each point, we call <code>.filterBounds(...)</code> to get only images intersecting that location.<br />
-4. <strong>Geotransform:</strong> We create a local geotransform (<code>edge_size</code>, <code>scale</code>) defining the spatial extent and resolution around each point.<br />
-5. <strong>Requests:</strong> Each point-image pair becomes a <code>Request</code>, stored in a single list.<br />
-6. <strong>Parallel download:</strong> With <code>cubexpress.getcube()</code>, all requests are fetched simultaneously, automatically splitting large outputs into sub-tiles if needed (up to <code>max_deep_level</code>).  </p>
-<h2 id="contributing"><strong>Contributing</strong></h2>
-<p>Contributions are welcome! Please open an issue or submit a pull request with proposed changes or bug fixes.  </p>
+<p><strong>How it works</strong>:  </p>
+<ol>
+<li><strong>Points:</strong> We define multiple coordinates in <code>points</code>.  </li>
+<li><strong>Global collection:</strong> We retrieve a broad Sentinel-2 collection covering the desired date range.  </li>
+<li><strong>Per-point filter:</strong> For each point, we call <code>.filterBounds(...)</code> to get only images intersecting that location.  </li>
+<li><strong>Geotransform:</strong> We create a local geotransform (<code>edge_size</code>, <code>scale</code>) defining the spatial extent and resolution around each point.  </li>
+<li><strong>Requests:</strong> Each point-image pair becomes a <code>Request</code>, stored in a single list.  </li>
+<li><strong>Parallel download:</strong> With <code>cubexpress.getcube()</code>, all requests are fetched simultaneously, automatically splitting large outputs into sub-tiles if needed (up to <code>max_deep_level</code>).  </li>
+</ol>
 <h2 id="license"><strong>License</strong></h2>
 <p>This project is licensed under the <a href="https://opensource.org/licenses/MIT">MIT License</a>.</p>
 <hr />
