@@ -1,4 +1,5 @@
-# 
+<h1></h1>
+
 <p align="center">
   <img src="./docs/logo_cubexpress.png" width="39%">
 </p>
@@ -30,11 +31,11 @@
 
 ---
 
-## **Overview 📊**
+## **Overview**
 
 **CubeXpress** is a Python package designed to **simplify and accelerate** the process of working with Google Earth Engine (GEE) data cubes. With features like multi-threaded downloads, automatic subdivision of large requests, and direct pixel-level computations on GEE, **CubeXpress** helps you handle massive datasets with ease.
 
-## **Key Features ✨**
+## **Key Features**
 - **Fast Image and Collection Downloads**  
   Retrieve single images or entire collections at once, taking advantage of multi-threaded requests.
 - **Automatic Tiling**  
@@ -44,7 +45,7 @@
 - **Scalable & Efficient**  
   Optimized memory usage and parallelism let you handle complex tasks in big data environments.
 
-## **Installation ⚙️**
+## **Installation**
 Install the latest version from PyPI:
 
 ```bash
@@ -261,6 +262,7 @@ print("Downloaded files:", results)
 
 
 **How it works**:  
+
 1. **Points:** We define multiple coordinates in `points`.  
 2. **Global collection:** We retrieve a broad Sentinel-2 collection covering the desired date range.  
 3. **Per-point filter:** For each point, we call `.filterBounds(...)` to get only images intersecting that location.  
@@ -269,9 +271,6 @@ print("Downloaded files:", results)
 6. **Parallel download:** With `cubexpress.getcube()`, all requests are fetched simultaneously, automatically splitting large outputs into sub-tiles if needed (up to `max_deep_level`).  
 
 
-
-## **Contributing**
-Contributions are welcome! Please open an issue or submit a pull request with proposed changes or bug fixes.  
 
 ## **License**
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).

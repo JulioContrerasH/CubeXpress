@@ -1,8 +1,9 @@
 [tool.poetry]
 name = "cubexpress"
-version = "0.0.1"
-description = "This is a template repository for Python projects that use Poetry for their dependency management."
-authors = ["Julio Contreras <contrerasnetk@gmail.com>"]
+version = "0.1.0"
+description = "A Python package for efficient processing of cubic earth observation (EO) data"
+authors = ["Julio Contreras <contrerasnetk@gmail.com>", "Cesar Aybar <csaybar@gmail.com>"]
+license = "MIT"
 repository = "https://github.com/JulioContrerasH/CubeXpress"
 documentation = "https://JulioContrerasH.github.io/CubeXpress/"
 readme = "README.md"
@@ -12,7 +13,11 @@ packages = [
 
 
 [tool.poetry.dependencies]
-python = ">=3.8,<4.0"
+python = ">=3.9,<4.0"
+numpy = ">=1.25.2"
+pandas = ">=2.0.3"
+utm = "^0.8.0"
+
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"

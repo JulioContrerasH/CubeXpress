@@ -1,6 +1,6 @@
 from cubexpress.conversion import lonlat2rt
-from cubexpress.geotyping import RasterTransform, Request, RequestSet
 from cubexpress.download import getcube, getGeoTIFF
+from cubexpress.geotyping import RasterTransform, Request, RequestSet
 
 # Export the functions
 __all__ = [
@@ -9,7 +9,7 @@ __all__ = [
     "Request",
     "RequestSet",
     "getcube",
-    "getGeoTIFF"
+    "getGeoTIFF",
 ]
 
 # Dynamic version import

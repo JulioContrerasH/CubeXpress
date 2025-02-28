@@ -1,31 +1,63 @@
-# Functions in **CubeXpress**
+# **Main Classes and Functions**
 
-This section explores how the **[CubeXpress](https://pypi.org/project/cubexpress/)** package streamlines working with satellite imagery and geospatial data in Google Earth Engine (GEE). **CubeXpress** provides a simple, unified API for creating download requests, handling automatic tiling of large images, and performing pixel-level computations.
 
----
+## **`lonlat2rt`**  
+Generates a **`RasterTransform`** for a given geographic point by converting **longitude/latitude** coordinates to **UTM projection**. This transformation defines the spatial extent, resolution, and coordinate reference system (CRS) needed for geospatial processing.
 
-## **1. Introduction to `cubexpress`**
+- **Arguments**:
+  - `lon`: Longitude coordinate.
+  - `lat`: Latitude coordinate.
+  - `edge_size`: Width/height of the raster in pixels.
+  - `scale`: Spatial resolution in meters per pixel.
 
-The **CubeXpress** package is designed to simplify and accelerate the retrieval and processing of large geospatial datasets from Google Earth Engine (GEE). Key capabilities include:
+- **Returns**:  
+  - A **`RasterTransform`** object containing the CRS, affine transformation parameters, and raster dimensions.
 
-- **Unified “Request” and “RequestSet” model:**  
-  Define one or many image download requests with minimal code, then process them in bulk.
+- **Example**:
+  ```python
+  import cubexpress
 
-- **Automatic sub-tiling:**  
-  If an image exceeds GEE’s size limits, CubeXpress will automatically split (“quad-split”) the request into smaller tiles until it succeeds.
+  geotransform = cubexpress.lonlat2rt(
+      lon=-76.5,
+      lat=40.0,
+      edge_size=512,
+      scale=30
+  )
+  
+  print(geotransform)
+  ```
+## **`RasterTransform`**
 
-- **Parallel downloads:**  
-  Multiple images can be retrieved concurrently using the `nworkers` parameter, greatly improving performance.
+Defines the spatial metadata required for geospatial operations, including the **coordinate reference system (CRS)** and **affine transformation matrix**.
 
-- **Flexible inputs:**  
-  - Pass an `ee.Image` object (including complex expressions like `.normalizedDifference(...)` or `.divide(...)`).  
-  - Or simply provide a string with the asset ID (e.g., `"COPERNICUS/S2_SR_HARMONIZED/..."`).  
+- **Attributes**:
+  - `crs`: EPSG code of the UTM projection.
+  - `geotransform`: Affine transformation parameters (scale, translation, shear).
+  - `width`: Raster width in pixels.
+  - `height`: Raster height in pixels.
 
----
+- **Example**:
+  ```python
+  from cubexpress.geotyping import RasterTransform
 
-## **2. Main Classes and Functions**
+  rt = RasterTransform(
+      crs="EPSG:32617",
+      geotransform={
+          "scaleX": 30, 
+          "shearX": 0, 
+          "translateX": 500000,
+          "scaleY": -30, 
+          "shearY": 0, 
+          "translateY": 4000000
+      },
+      width=512,
+      height=512
+  )
+  print(rt)
+  ```
 
-### **`Request`**
+
+## **`Request`**
 A single image download specification.
 
 - **Parameters**:  
@@ -41,14 +73,14 @@ A single image download specification.
       id="my_image",
       raster_transform=geotransform,
       bands=["B4", "B3", "B2"],
-      image="COPERNICUS/S2_SR_HARMONIZED/20240105T..."
+      image="COPERNICUS/S2_HARMONIZED/20170804T154911_20170804T155116_T18SUJ"
   )
   ```
 
-### **`RequestSet`**
-A collection of `Request` objects, validated and prepared for download.  
+## **`RequestSet`**
+A container for multiple `Request` objects, ensuring validation and organization before processing.
 
-- **Creates** an internal **DataFrame** with all request details (the “manifest”). 
+- **Automatically generates** an internal **DataFrame** (the "manifest") containing all request details.
 
 - **Example**:
   ```python
@@ -56,7 +88,15 @@ A collection of `Request` objects, validated and prepared for download.
   request_set = cubexpress.RequestSet(requestset=requests)
   ```
 
-### **`getcube()`**
+- **Viewing the RequestSet DataFrame**:  
+  To inspect the structured request details, you can print the internal DataFrame:
+
+  ```python
+  print(request_set._dataframe)
+  ```
+
+
+## **`getcube`**
 The main download function. It reads the manifest from a `RequestSet`, calls GEE’s internal APIs (`getPixels`/`computePixels`), and writes GeoTIFFs to disk.  
 
 - **Arguments**:

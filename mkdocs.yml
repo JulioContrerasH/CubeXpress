@@ -61,7 +61,7 @@ nav:
     - ./docs/COMPARATION.md
     - Get: ./docs/Comparation/eedatagetPixels.md
     - Compute: ./docs/Comparation/eedatacomputePixels.md
-    - Comparison: ./docs/Comparation/comparison.md
+    - Comparison: ./docs/Comparation/comparision.md
     - Conclusion: ./docs/Comparation/conclusion.md
 
 # Plugins
