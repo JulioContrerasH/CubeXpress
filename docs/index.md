@@ -21,8 +21,8 @@ hide:
 <a href="https://opensource.org/licenses/MIT" target="_blank">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
 </a>
-<a href="https://github.com/andesdatacube/cubexpress/actions/workflows/tests.yml" target="_blank">
-    <img src="https://github.com/andesdatacube/cubexpress/actions/workflows/tests.yml/badge.svg" alt="Tests">
+<a href="https://github.com/JulioContrerasH/CubeXpress/actions/workflows/tests.yml" target="_blank">
+    <img src="https://github.com/JulioContrerasH/CubeXpress/actions/workflows/tests.yml/badge.svg" alt="Tests">
 </a>
 </p>
 

@@ -190,3 +190,7 @@ cython_debug/
 marta/2020_pp.tif
 *.deb
 __pycache__/
+
+# Nota local del repo (a dónde se sube y cómo se publica)
+NOTA-REPO.md
+docs/patch_size_review.md
