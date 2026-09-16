@@ -9,16 +9,16 @@ readme = "README.md"
 keywords = ["earth-engine", "sentinel-2", "geospatial", "eo", "cube"]
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
   "Topic :: Scientific/Engineering :: GIS",
 ]
 packages = [{ include = "cubexpress" }]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.11,<3.14"
 pyproj = ">=3.6.0"
 earthengine-api = ">=1.5.12"
 rasterio = ">=1.3.0"
@@ -42,7 +42,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["F", "E", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PTH", "PERF"]
@@ -60,7 +60,7 @@ max-complexity = 10
 # ──────────────────────────────────────────────────────────────────────────────
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = ["cubexpress"]
 warn_return_any = true
 warn_unused_configs = true
