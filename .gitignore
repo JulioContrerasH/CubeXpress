@@ -191,6 +191,8 @@ marta/2020_pp.tif
 *.deb
 __pycache__/
 
-# Nota local del repo (a dónde se sube y cómo se publica)
+# Los archivos personales de release viven en el vault, no en el paquete
 NOTA-REPO.md
+up.txt
+release.sh
 docs/patch_size_review.md
