@@ -16,7 +16,6 @@ example.py
 s2_download/
 s2_table/
 df_raw.csv
-example.ipynb
 df_raw2.csv
 s2_l2a_gee_geom_download.csv
 s2_l2a_gee.csv
