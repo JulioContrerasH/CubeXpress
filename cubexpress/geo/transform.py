@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import functools
-import math
 from dataclasses import dataclass
 
 _WKT1_PREFIXES = ("PROJCS", "GEOGCS", "GEOCCS", "COMPD_CS")
 _NUMERIC_FIELDS = ("translate_x", "translate_y", "scale_x", "scale_y", "shear_x", "shear_y")
-_METRES_PER_DEGREE = 111_320.0
 
 
 @functools.lru_cache(maxsize=64)
@@ -35,9 +33,19 @@ def _validated_crs(value: str):
 
 
 def _metres_in_degrees(scale_m: float, latitude: float) -> tuple[float, float]:
-    """Pixel size in degrees that matches `scale_m` metres at that latitude."""
-    cos_lat = max(abs(math.cos(math.radians(max(min(latitude, 89.9), -89.9)))), 1e-6)
-    return scale_m / (_METRES_PER_DEGREE * cos_lat), scale_m / _METRES_PER_DEGREE
+    """Pixel size in degrees that matches `scale_m` metres at that latitude.
+
+    Longitude shrinks with the cosine of the latitude, latitude does not. Measured with the
+    WGS84 ellipsoid: one degree of latitude is ~110.6 km anywhere, while one degree of
+    longitude goes from 111.3 km at the equator to 19.4 km at 80 degrees south.
+    """
+    from pyproj import Geod
+
+    lat = max(min(latitude, 89.9), -89.9)
+    geod = Geod(ellps="WGS84")
+    _, _, metres_lat = geod.inv(0.0, lat, 0.0, lat + 1.0)
+    _, _, metres_lon = geod.inv(0.0, lat, 1.0, lat)
+    return scale_m / metres_lon, scale_m / metres_lat
 
 
 @dataclass(frozen=True)

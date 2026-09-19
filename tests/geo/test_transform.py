@@ -186,7 +186,7 @@ def test_geographic_crs_with_metre_scale_rejected():
 
 
 def test_error_message_suggests_the_degrees():
-    with pytest.raises(ValueError, match=r"scale_x=0\.000276"):
+    with pytest.raises(ValueError, match=r"scale_x=0\.000275"):
         RasterTransform(
             crs="EPSG:4326", translate_x=-77.0, translate_y=-12.0,
             scale_x=30, scale_y=-30, width=2, height=2,
