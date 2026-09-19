@@ -38,7 +38,7 @@ def _fake_rt(width=1000, height=1000):
         def __init__(self, w, h):
             self.width = w
             self.height = h
-        def area_pixels(self):
+        def n_pixels(self):
             return self.width * self.height
     return _RT(width, height)
 

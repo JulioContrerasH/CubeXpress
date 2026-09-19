@@ -81,9 +81,9 @@ def test_point_to_rt_rectangular_patch():
     rt = point_to_rt(lon=-77.0, lat=-12.0, width=512, height=256, scale=10)
     assert rt.width == 512
     assert rt.height == 256
-    w_m, h_m = rt.size_meters()
-    assert w_m == 5_120
-    assert h_m == 2_560
+    xmin, ymin, xmax, ymax = rt.bbox()
+    assert xmax - xmin == 5_120
+    assert ymax - ymin == 2_560
 
 
 def test_point_to_rt_southern_hemisphere_epsg():

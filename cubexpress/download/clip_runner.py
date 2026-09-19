@@ -135,7 +135,7 @@ def express_clip(
 
     # CASE A: the whole bbox fits in one tile — no skipping possible.
     # Download each row whole (one-tile job), then mask to the polygon.
-    if max_pixels is None or rt.area_pixels() <= max_pixels:
+    if max_pixels is None or rt.n_pixels() <= max_pixels:
         return _run_whole(
             table, polygon, outfolder, nworkers, file_format, overwrite, verbose
         )

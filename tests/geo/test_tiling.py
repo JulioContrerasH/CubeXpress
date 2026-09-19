@@ -77,7 +77,7 @@ def test_split_grid_when_both_strips_fail():
     # tile_side = sqrt(100) = 10
     assert all(t.width <= 10 for t in tiles)
     assert all(t.height <= 10 for t in tiles)
-    assert all(t.area_pixels() <= 100 for t in tiles)
+    assert all(t.n_pixels() <= 100 for t in tiles)
 
 
 # --- Invariants: coverage, no overlap, same CRS/scale ---
@@ -85,8 +85,8 @@ def test_split_grid_when_both_strips_fail():
 def test_split_total_pixels_preserved():
     rt = _make_rt(width=1000, height=1500)
     tiles = split_transform(rt, max_pixels=200_000)
-    total = sum(t.area_pixels() for t in tiles)
-    assert total == rt.area_pixels()
+    total = sum(t.n_pixels() for t in tiles)
+    assert total == rt.n_pixels()
 
 
 def test_split_all_tiles_same_crs():
@@ -105,7 +105,7 @@ def test_split_all_tiles_same_scale():
 def test_split_no_tile_exceeds_max_pixels():
     rt = _make_rt(width=1000, height=1500)
     tiles = split_transform(rt, max_pixels=200_000)
-    assert all(t.area_pixels() <= 200_000 for t in tiles)
+    assert all(t.n_pixels() <= 200_000 for t in tiles)
 
 
 def test_split_bboxes_cover_parent_exactly():

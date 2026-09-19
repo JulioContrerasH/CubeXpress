@@ -41,7 +41,7 @@ def split_transform(
     if max_pixels <= 0:
         raise ValueError(f"max_pixels must be > 0, got {max_pixels}")
 
-    if rt.area_pixels() <= max_pixels:
+    if rt.n_pixels() <= max_pixels:
         return [rt]
 
     # Polygon clipping wants square-ish tiles so bbox corners can be skipped.
