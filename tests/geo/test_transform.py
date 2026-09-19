@@ -108,6 +108,28 @@ def test_string_height_rejected():
         )
 
 
+# --- Validation: the four spatial fields must be numbers ---
+
+@pytest.mark.parametrize("field", ["translate_x", "translate_y", "scale_x", "scale_y", "shear_x", "shear_y"])
+@pytest.mark.parametrize("bad", ["0", None, True])
+def test_numeric_fields_reject_non_numbers(field, bad):
+    kwargs = dict(
+        crs="EPSG:32718", translate_x=0, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    kwargs[field] = bad
+    with pytest.raises(TypeError, match=field):
+        RasterTransform(**kwargs)
+
+
+def test_int_numeric_fields_accepted():
+    rt = RasterTransform(
+        crs="EPSG:32718", translate_x=0, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    assert rt.scale_x == 10
+
+
 # --- Validation: the CRS must be one Earth Engine can parse ---
 
 def test_wkt1_crs_accepted():

@@ -6,6 +6,7 @@ import functools
 from dataclasses import dataclass
 
 _WKT1_PREFIXES = ("PROJCS", "GEOGCS", "GEOCCS", "COMPD_CS")
+_NUMERIC_FIELDS = ("translate_x", "translate_y", "scale_x", "scale_y", "shear_x", "shear_y")
 
 
 @functools.lru_cache(maxsize=64)
@@ -56,6 +57,10 @@ class RasterTransform:
         if not isinstance(self.crs, str):
             raise TypeError(f"crs must be str, got {type(self.crs).__name__}")
         _validate_crs(self.crs)
+        for name in _NUMERIC_FIELDS:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise TypeError(f"{name} must be a number, got {type(value).__name__}")
         for name, value in (("width", self.width), ("height", self.height)):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{name} must be int, got {type(value).__name__}")
