@@ -30,9 +30,9 @@ class RasterTransform:
     def __post_init__(self) -> None:
         if not self.crs:
             raise ValueError("crs cannot be empty")
-        for nombre, valor in (("width", self.width), ("height", self.height)):
-            if isinstance(valor, bool) or not isinstance(valor, int):
-                raise TypeError(f"{nombre} must be int, got {type(valor).__name__}")
+        for name, value in (("width", self.width), ("height", self.height)):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"{name} must be int, got {type(value).__name__}")
         if self.width <= 0 or self.height <= 0:
             raise ValueError(f"width/height must be positive, got {self.width}x{self.height}")
         if self.scale_x <= 0:
