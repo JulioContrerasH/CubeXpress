@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import pyproj
 
 from cubexpress.geo.transform import RasterTransform
 from dataclasses import FrozenInstanceError
@@ -104,6 +105,51 @@ def test_string_height_rejected():
         RasterTransform(
             crs="EPSG:32718", translate_x=0, translate_y=0,
             scale_x=10, scale_y=-10, width=512, height="512",
+        )
+
+
+# --- Validation: the CRS must be one Earth Engine can parse ---
+
+def test_wkt1_crs_accepted():
+    wkt1 = pyproj.CRS.from_epsg(32718).to_wkt(version="WKT1_GDAL")
+    rt = RasterTransform(
+        crs=wkt1, translate_x=0, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    assert rt.crs == wkt1
+
+
+def test_wkt2_crs_rejected():
+    wkt2 = pyproj.CRS.from_epsg(32718).to_wkt()  # pyproj returns WKT2 by default
+    with pytest.raises(ValueError, match="Earth Engine"):
+        RasterTransform(
+            crs=wkt2, translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=512, height=512,
+        )
+
+
+def test_proj4_crs_rejected():
+    proj4 = pyproj.CRS.from_epsg(32718).to_proj4()
+    with pytest.raises(ValueError, match="Earth Engine"):
+        RasterTransform(
+            crs=proj4, translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=512, height=512,
+        )
+
+
+def test_unknown_epsg_rejected():
+    with pytest.raises(ValueError, match="not a valid CRS"):
+        RasterTransform(
+            crs="EPSG:99999", translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=512, height=512,
+        )
+
+
+def test_non_string_crs_rejected():
+    with pytest.raises(TypeError, match="crs"):
+        RasterTransform(
+            crs=32718, translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=512, height=512,
         )
 
 

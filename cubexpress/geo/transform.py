@@ -2,7 +2,32 @@
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
+
+_WKT1_PREFIXES = ("PROJCS", "GEOGCS", "GEOCCS", "COMPD_CS")
+
+
+@functools.lru_cache(maxsize=64)
+def _validate_crs(value: str) -> None:
+    """Raise if the CRS is not one that Earth Engine can parse.
+
+    Earth Engine takes standard codes ("EPSG:32718") or WKT version 1. It rejects WKT2
+    (what pyproj returns by default) and PROJ strings. The cache keeps this free: there are
+    a handful of distinct CRS values per run, and parsing one costs ~190 microseconds.
+    """
+    from pyproj import CRS
+
+    try:
+        CRS.from_user_input(value)
+    except Exception as exc:
+        raise ValueError(f"crs is not a valid CRS: {value!r}") from exc
+
+    text = value.strip().upper()
+    if not (text.startswith("EPSG:") or text.split("[", 1)[0] in _WKT1_PREFIXES):
+        raise ValueError(
+            f"crs is not a format Earth Engine accepts (use EPSG:XXXX or WKT1): {value[:40]!r}"
+        )
 
 
 @dataclass(frozen=True)
@@ -28,8 +53,9 @@ class RasterTransform:
     shear_y: float = 0.0
 
     def __post_init__(self) -> None:
-        if not self.crs:
-            raise ValueError("crs cannot be empty")
+        if not isinstance(self.crs, str):
+            raise TypeError(f"crs must be str, got {type(self.crs).__name__}")
+        _validate_crs(self.crs)
         for name, value in (("width", self.width), ("height", self.height)):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{name} must be int, got {type(value).__name__}")
