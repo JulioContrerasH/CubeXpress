@@ -175,6 +175,40 @@ def test_non_string_crs_rejected():
         )
 
 
+# --- Validation: a geographic CRS takes degrees, not metres ---
+
+def test_geographic_crs_with_metre_scale_rejected():
+    with pytest.raises(ValueError, match="degrees for EPSG:4326"):
+        RasterTransform(
+            crs="EPSG:4326", translate_x=-77.0, translate_y=-12.0,
+            scale_x=30, scale_y=-30, width=2, height=2,
+        )
+
+
+def test_error_message_suggests_the_degrees():
+    with pytest.raises(ValueError, match=r"scale_x=0\.000276"):
+        RasterTransform(
+            crs="EPSG:4326", translate_x=-77.0, translate_y=-12.0,
+            scale_x=30, scale_y=-30, width=2, height=2,
+        )
+
+
+def test_geographic_crs_with_degree_scale_accepted():
+    rt = RasterTransform(
+        crs="EPSG:4326", translate_x=-77.0, translate_y=-12.0,
+        scale_x=0.000276, scale_y=-0.000269, width=100, height=100,
+    )
+    assert rt.n_pixels() == 10_000
+
+
+def test_projected_crs_with_metre_scale_accepted():
+    rt = RasterTransform(
+        crs="EPSG:24878", translate_x=282462.19, translate_y=8673024.59,
+        scale_x=30, scale_y=-30, width=100, height=100,
+    )
+    assert rt.scale_x == 30
+
+
 # --- Derived methods ---
 
 def test_n_pixels():

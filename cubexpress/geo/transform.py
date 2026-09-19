@@ -3,24 +3,26 @@
 from __future__ import annotations
 
 import functools
+import math
 from dataclasses import dataclass
 
 _WKT1_PREFIXES = ("PROJCS", "GEOGCS", "GEOCCS", "COMPD_CS")
 _NUMERIC_FIELDS = ("translate_x", "translate_y", "scale_x", "scale_y", "shear_x", "shear_y")
+_METRES_PER_DEGREE = 111_320.0
 
 
 @functools.lru_cache(maxsize=64)
-def _validate_crs(value: str) -> None:
-    """Raise if the CRS is not one that Earth Engine can parse.
+def _validated_crs(value: str):
+    """Return the parsed CRS if Earth Engine can take it, raise otherwise.
 
-    Earth Engine takes standard codes ("EPSG:32718") or WKT version 1. It rejects WKT2
-    (what pyproj returns by default) and PROJ strings. The cache keeps this free: there are
-    a handful of distinct CRS values per run, and parsing one costs ~190 microseconds.
+    Earth Engine accepts standard codes ("EPSG:32718") or WKT version 1. It rejects WKT2
+    (what pyproj returns by default) and PROJ strings. The cache keeps this free: there are a
+    handful of distinct CRS values per run, and parsing one costs ~190 microseconds.
     """
     from pyproj import CRS
 
     try:
-        CRS.from_user_input(value)
+        crs = CRS.from_user_input(value)
     except Exception as exc:
         raise ValueError(f"crs is not a valid CRS: {value!r}") from exc
 
@@ -29,6 +31,13 @@ def _validate_crs(value: str) -> None:
         raise ValueError(
             f"crs is not a format Earth Engine accepts (use EPSG:XXXX or WKT1): {value[:40]!r}"
         )
+    return crs
+
+
+def _metres_in_degrees(scale_m: float, latitude: float) -> tuple[float, float]:
+    """Pixel size in degrees that matches `scale_m` metres at that latitude."""
+    cos_lat = max(abs(math.cos(math.radians(max(min(latitude, 89.9), -89.9)))), 1e-6)
+    return scale_m / (_METRES_PER_DEGREE * cos_lat), scale_m / _METRES_PER_DEGREE
 
 
 @dataclass(frozen=True)
@@ -56,7 +65,7 @@ class RasterTransform:
     def __post_init__(self) -> None:
         if not isinstance(self.crs, str):
             raise TypeError(f"crs must be str, got {type(self.crs).__name__}")
-        _validate_crs(self.crs)
+        crs = _validated_crs(self.crs)
         for name in _NUMERIC_FIELDS:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -64,6 +73,13 @@ class RasterTransform:
         for name, value in (("width", self.width), ("height", self.height)):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{name} must be int, got {type(value).__name__}")
+        if crs.is_geographic and max(abs(self.scale_x), abs(self.scale_y)) >= 1:
+            scale_m = max(abs(self.scale_x), abs(self.scale_y))
+            lon_deg, lat_deg = _metres_in_degrees(scale_m, self.translate_y)
+            raise ValueError(
+                f"scale is in degrees for {self.crs}, not metres. For {scale_m:g} m at "
+                f"latitude {self.translate_y:g} use scale_x={lon_deg:.6f}, scale_y=-{lat_deg:.6f}"
+            )
         if self.width <= 0 or self.height <= 0:
             raise ValueError(f"width/height must be positive, got {self.width}x{self.height}")
         if self.scale_x <= 0:
