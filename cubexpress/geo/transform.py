@@ -30,6 +30,9 @@ class RasterTransform:
     def __post_init__(self) -> None:
         if not self.crs:
             raise ValueError("crs cannot be empty")
+        for nombre, valor in (("width", self.width), ("height", self.height)):
+            if isinstance(valor, bool) or not isinstance(valor, int):
+                raise TypeError(f"{nombre} must be int, got {type(valor).__name__}")
         if self.width <= 0 or self.height <= 0:
             raise ValueError(f"width/height must be positive, got {self.width}x{self.height}")
         if self.scale_x <= 0:
@@ -37,7 +40,7 @@ class RasterTransform:
         if self.scale_y >= 0:
             raise ValueError(f"scale_y must be < 0 (GDAL convention), got {self.scale_y}")
 
-    def area_pixels(self) -> int:
+    def n_pixels(self) -> int:
         """Total number of pixels."""
         return self.width * self.height
 
@@ -52,10 +55,6 @@ class RasterTransform:
         xmax = xmin + self.width * self.scale_x
         ymin = ymax + self.height * self.scale_y  # scale_y is negative
         return (xmin, ymin, xmax, ymax)
-
-    def size_meters(self) -> tuple[float, float]:
-        """Dimensions in meters: (width, height)."""
-        return (self.width * self.scale_x, self.height * abs(self.scale_y))
 
     def to_ee_dict(self) -> dict[str, float]:
         """Earth Engine compatible affineTransform dictionary."""

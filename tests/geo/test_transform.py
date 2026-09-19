@@ -73,14 +73,48 @@ def test_empty_crs_rejected():
         )
 
 
+# --- Validation: dimensions must be integers ---
+
+def test_float_width_rejected():
+    with pytest.raises(TypeError, match="width"):
+        RasterTransform(
+            crs="EPSG:32718", translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=100.5, height=512,
+        )
+
+
+def test_int_like_float_height_rejected():
+    with pytest.raises(TypeError, match="height"):
+        RasterTransform(
+            crs="EPSG:32718", translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=512, height=512.0,
+        )
+
+
+def test_bool_width_rejected():
+    with pytest.raises(TypeError, match="width"):
+        RasterTransform(
+            crs="EPSG:32718", translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=True, height=512,
+        )
+
+
+def test_string_height_rejected():
+    with pytest.raises(TypeError, match="height"):
+        RasterTransform(
+            crs="EPSG:32718", translate_x=0, translate_y=0,
+            scale_x=10, scale_y=-10, width=512, height="512",
+        )
+
+
 # --- Derived methods ---
 
-def test_area_pixels():
+def test_n_pixels():
     rt = RasterTransform(
         crs="EPSG:32718", translate_x=0, translate_y=0,
         scale_x=10, scale_y=-10, width=100, height=200,
     )
-    assert rt.area_pixels() == 20_000
+    assert rt.n_pixels() == 20_000
 
 
 def test_bbox():
@@ -93,16 +127,6 @@ def test_bbox():
     assert ymax == 8_000_000
     assert xmax == 501_000       # 500_000 + 100 * 10
     assert ymin == 7_998_000     # 8_000_000 + 200 * (-10)
-
-
-def test_size_meters():
-    rt = RasterTransform(
-        crs="EPSG:32718", translate_x=0, translate_y=0,
-        scale_x=10, scale_y=-10, width=100, height=200,
-    )
-    width_m, height_m = rt.size_meters()
-    assert width_m == 1_000
-    assert height_m == 2_000
 
 
 # --- Earth Engine conversion ---
@@ -162,16 +186,6 @@ def test_bbox_with_fractional_scale():
     assert ymax == 8_000_000.75
     assert xmax == 500_050.5    # 500_000.5 + 100 * 0.5
     assert ymin == 7_999_900.75  # 8_000_000.75 + 200 * (-0.5)
-
-
-def test_size_meters_with_fractional_scale():
-    rt = RasterTransform(
-        crs="EPSG:32718", translate_x=0, translate_y=0,
-        scale_x=0.5, scale_y=-0.5, width=100, height=200,
-    )
-    width_m, height_m = rt.size_meters()
-    assert width_m == 50.0
-    assert height_m == 100.0
 
 
 # --- shear (rotated rasters) ---
