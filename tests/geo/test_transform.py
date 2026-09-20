@@ -151,13 +151,34 @@ def test_metres_to_degrees_at_equator_are_close():
 
 # --- Validation: the CRS must be one Earth Engine can parse ---
 
-def test_wkt1_crs_canonicalized():
+def test_wkt1_crs_is_respected():
+    """Un WKT1 se respeta tal cual: es lo que GEE acepta y la salida para un código nuevo."""
     wkt1 = pyproj.CRS.from_epsg(32718).to_wkt(version="WKT1_GDAL")
     rt = RasterTransform(
         crs=wkt1, translate_x=0, translate_y=0,
         scale_x=10, scale_y=-10, width=512, height=512,
     )
-    assert rt.crs == "EPSG:32718"
+    assert rt.crs == wkt1
+
+
+def test_equi7_proj4_canonicalized_to_its_epsg():
+    """Equi7 South America: pyproj lo resuelve a EPSG:27707 (registrado en 2024)."""
+    equi7 = pyproj.CRS.from_epsg(27707).to_proj4()
+    rt = RasterTransform(
+        crs=equi7, translate_x=7257179.236, translate_y=5592024.446,
+        scale_x=100, scale_y=-100, width=10, height=10,
+    )
+    assert rt.crs == "EPSG:27707"
+
+
+def test_equi7_wkt1_is_the_escape_hatch():
+    """Ese mismo CRS, en WKT1, se respeta: es lo que GEE sí entiende."""
+    wkt1 = pyproj.CRS.from_epsg(27707).to_wkt(version="WKT1_GDAL")
+    rt = RasterTransform(
+        crs=wkt1, translate_x=7257179.236, translate_y=5592024.446,
+        scale_x=100, scale_y=-100, width=10, height=10,
+    )
+    assert rt.crs.startswith("PROJCS[")
 
 
 def test_wkt2_crs_canonicalized():

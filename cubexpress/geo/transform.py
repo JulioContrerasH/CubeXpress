@@ -23,14 +23,24 @@ def _parsed_crs(value: str):
         raise ValueError(f"crs is not a valid CRS: {value!r}") from exc
 
 
+_WKT1_PREFIXES = ("PROJCS", "GEOGCS", "GEOCCS", "COMPD_CS")
+
+
 @functools.lru_cache(maxsize=64)
 def _gee_crs(value: str) -> str:
     """The spelling Earth Engine accepts for this CRS.
 
-    Whatever pyproj can parse becomes its standard code ("EPSG:32718"). A CRS with no code,
-    like one written by hand, is re-emitted as WKT version 1, the other format Earth Engine
-    takes. Cached: the conversion costs ~0.6 ms once per distinct CRS, and nothing after.
+    A WKT1 string is respected as is: it is what Earth Engine takes, and it is the escape
+    hatch for a CRS whose code Earth Engine does not know. Equi7 South America is the live
+    example: pyproj resolves it to EPSG:27707 (registered in 2024), Earth Engine cannot parse
+    that code, and the WKT1 works.
+
+    Anything else becomes its standard code ("EPSG:32718"), or WKT1 when the CRS has no code.
+    Cached: the conversion costs ~0.6 ms once per distinct CRS, and nothing after.
     """
+    text = value.strip().upper()
+    if text.startswith(_WKT1_PREFIXES):
+        return value
     crs = _parsed_crs(value)
     epsg = crs.to_epsg()
     if epsg:

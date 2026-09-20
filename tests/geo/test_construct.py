@@ -364,6 +364,35 @@ def test_bbox_to_rt_geographic_converts_metres():
     assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
 
 
+# --- builders: los tipos se revisan al entrar ---
+
+@pytest.mark.parametrize("campo,malo", [
+    ("lon", "-77"), ("lat", None), ("width", "100"), ("height", 10.5), ("scale", "10"),
+])
+def test_point_to_rt_rejects_bad_types(campo, malo):
+    args = dict(lon=-77.0, lat=-12.0, width=100, height=100, scale=10)
+    args[campo] = malo
+    with pytest.raises(TypeError, match=campo):
+        point_to_rt(**args)
+
+
+def test_bbox_to_rt_rejects_text_coordinates():
+    with pytest.raises(TypeError, match="xmin"):
+        bbox_to_rt("0", 0, 10, 10, crs="EPSG:32718", scale=1)
+
+
+def test_polygon_to_rt_rejects_text_scale():
+    with pytest.raises(TypeError, match="scale"):
+        polygon_to_rt(LIMA_WGS84, scale="10")
+
+
+def test_asset_to_rt_explains_a_computed_image(mock_ee_image):
+    """Una imagen sin proyección nativa (una constante) explica qué pasa."""
+    sin_proyeccion = {"type": "Image", "bands": [{"id": "constant", "data_type": {"precision": "int", "type": "PixelType"}}]}
+    with pytest.raises(ValueError, match="no native projection"):
+        asset_to_rt(_FakeImage(info=sin_proyeccion))
+
+
 # --- polygon_to_rt: invariance across formats and CRS ---
 
 _EXTS = [".shp", ".gpkg", ".geojson", ".parquet", ".kml", ".wkt", ".wkb", ".csv"]

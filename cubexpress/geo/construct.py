@@ -13,6 +13,17 @@ from shapely.ops import transform as shp_transform
 from cubexpress.geo.transform import RasterTransform
 
 
+def _require_number(name: str, value) -> None:
+    """Fail fast with a clear message: a text where a number goes breaks later, in GEE."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a number, got {type(value).__name__}")
+
+
+def _require_int(name: str, value) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be int, got {type(value).__name__}")
+
+
 def _utm_zone_epsg(lon: float, lat: float) -> str:
     if not -180 <= lon <= 180:
         raise ValueError(f"lon must be in [-180, 180], got {lon}")
@@ -55,6 +66,11 @@ def point_to_rt(
     Returns:
         RasterTransform anchored so its bounding box is centered on (lon, lat).
     """
+    _require_number("lon", lon)
+    _require_number("lat", lat)
+    _require_int("width", width)
+    _require_int("height", height)
+    _require_number("scale", scale)
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
 
@@ -118,6 +134,8 @@ def bbox_to_rt(
     Returns:
         RasterTransform whose bbox contains the input bbox at the given scale.
     """
+    for name, value in (("xmin", xmin), ("ymin", ymin), ("xmax", xmax), ("ymax", ymax), ("scale", scale)):
+        _require_number(name, value)
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
     if xmin >= xmax:
@@ -248,6 +266,7 @@ def polygon_to_rt(
         ValueError: if scale <= 0, the polygon is topologically invalid, or
             coordinates are inconsistent with the declared CRS.
     """
+    _require_number("scale", scale)
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
 
@@ -342,6 +361,13 @@ def asset_to_rt(
         raise ValueError(f"Image has no bands: {image!r}")
 
     band0 = bands[0]
+    if not all(key in band0 for key in ("crs", "crs_transform", "dimensions")):
+        raise ValueError(
+            f"The image has no native projection: {image!r}. That happens with computed "
+            f"images like ee.Image.constant(), which have no crs, transform or dimensions. "
+            f"Use a projected asset, or build the RasterTransform by hand."
+        )
+
     native_crs = band0["crs"]
     native_transform = band0["crs_transform"]
     native_width, native_height = band0["dimensions"]
@@ -358,6 +384,7 @@ def asset_to_rt(
             height=native_height,
         )
 
+    _require_number("scale", scale)
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
 
