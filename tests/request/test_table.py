@@ -284,7 +284,7 @@ def test_repr_shows_asset_stripped_of_granule():
         raster_transform=_make_rt(),
         image="COPERNICUS/S2_HARMONIZED/20230104T094411_x_T32NKF",
         bands=("B4",),
-        metadata={"date": "20230104"},   # ← AÑADE esto: discover siempre lo trae
+        metadata={"date": "20230104"},   # <-- ADD this: discover always brings it
     )
     r = repr(RequestTable(rows=[row]))
     assert "COPERNICUS/S2_HARMONIZED" in r
@@ -431,7 +431,7 @@ def test_set_transform_returns_new_table():
 
 def test_transforms_single_shared():
     table = RequestTable(rows=[_make_row("a"), _make_row("b")])
-    out = str(table.transforms)          # str() para comparar texto
+    out = str(table.transforms)          # str() to compare as text
     assert "1 unique transform" in out
     assert "512×512" in out
 

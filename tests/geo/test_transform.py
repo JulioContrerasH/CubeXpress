@@ -137,11 +137,11 @@ def test_metres_to_degrees_at_lat_minus_12():
     lon_deg, lat_deg = metres_to_degrees(30, -12.0)
     assert lon_deg == pytest.approx(0.000275, abs=1e-6)
     assert lat_deg == pytest.approx(0.000271, abs=1e-6)
-    assert lon_deg > lat_deg          # a 12 grados del ecuador, la longitud son más grados
+    assert lon_deg > lat_deg          # at 12 degrees from the equator, longitude takes more degrees
 
 
 def test_metres_to_degrees_at_equator_are_close():
-    """En el elipsoide no son idénticos ni en el ecuador, pero difieren menos del 1%."""
+    """On the ellipsoid they are not identical even at the equator, but they differ by under 1%."""
     from cubexpress.geo.transform import metres_to_degrees
     lon_deg, lat_deg = metres_to_degrees(30, 0.0)
     assert lon_deg == pytest.approx(0.000269, abs=1e-6)
@@ -152,7 +152,7 @@ def test_metres_to_degrees_at_equator_are_close():
 # --- Validation: the CRS must be one Earth Engine can parse ---
 
 def test_wkt1_crs_is_respected():
-    """Un WKT1 se respeta tal cual: es lo que GEE acepta y la salida para un código nuevo."""
+    """A WKT1 is respected as is: it is what Earth Engine takes, and the escape hatch for a new code."""
     wkt1 = pyproj.CRS.from_epsg(32718).to_wkt(version="WKT1_GDAL")
     rt = RasterTransform(
         crs=wkt1, translate_x=0, translate_y=0,
@@ -172,7 +172,7 @@ def test_equi7_proj4_canonicalized_to_its_epsg():
 
 
 def test_equi7_wkt1_is_the_escape_hatch():
-    """Ese mismo CRS, en WKT1, se respeta: es lo que GEE sí entiende."""
+    """The same CRS, as WKT1, is respected: that is what Earth Engine does understand."""
     wkt1 = pyproj.CRS.from_epsg(27707).to_wkt(version="WKT1_GDAL")
     rt = RasterTransform(
         crs=wkt1, translate_x=7257179.236, translate_y=5592024.446,
@@ -219,7 +219,7 @@ def test_custom_crs_without_epsg_becomes_wkt1():
         crs=local.to_proj4(), translate_x=100000, translate_y=0,
         scale_x=10, scale_y=-10, width=512, height=512,
     )
-    assert rt.crs.startswith("PROJCS[")     # WKT1, que es lo que GEE acepta
+    assert rt.crs.startswith("PROJCS[")     # WKT1, which is what Earth Engine accepts
 
 
 def test_unknown_epsg_rejected():

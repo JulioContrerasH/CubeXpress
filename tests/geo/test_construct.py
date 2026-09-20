@@ -337,7 +337,7 @@ def test_polygon_to_rt_target_4326_accepts_metres():
     assert rt.crs == "EPSG:4326"
     assert rt.scale_x == pytest.approx(0.000275, abs=1e-6)
     assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
-    assert rt.width > 100        # 30 m, no 30 grados
+    assert rt.width > 100        # 30 metres, not 30 degrees
 
 
 def test_polygon_to_rt_projected_input_keeps_its_crs():
@@ -364,7 +364,7 @@ def test_bbox_to_rt_geographic_converts_metres():
     assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
 
 
-# --- builders: los tipos se revisan al entrar ---
+# --- builders: input types are checked on the way in ---
 
 @pytest.mark.parametrize("campo,malo", [
     ("lon", "-77"), ("lat", None), ("width", "100"), ("height", 10.5), ("scale", "10"),
@@ -387,7 +387,7 @@ def test_polygon_to_rt_rejects_text_scale():
 
 
 def test_asset_to_rt_explains_a_computed_image(mock_ee_image):
-    """Una imagen sin proyección nativa (una constante) explica qué pasa."""
+    """An image with no native projection (a constant) explains what happened."""
     sin_proyeccion = {"type": "Image", "bands": [{"id": "constant", "data_type": {"precision": "int", "type": "PixelType"}}]}
     with pytest.raises(ValueError, match="no native projection"):
         asset_to_rt(_FakeImage(info=sin_proyeccion))
@@ -780,7 +780,7 @@ def test_to_polygon_from_feature_collection_string():
 def test_to_polygon_rejects_malformed_geojson_string():
     from cubexpress.geo.construct import to_polygon
     with pytest.raises(ValueError, match="GeoJSON string"):
-        to_polygon("{esto no es json}")
+        to_polygon("{this is not json}")
 
 
 def test_to_polygon_feature_collection_unions_all_features():
