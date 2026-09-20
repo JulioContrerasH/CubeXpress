@@ -690,3 +690,45 @@ def test_to_polygon_rejects_bad_input():
     from cubexpress.geo.construct import to_polygon
     with pytest.raises(TypeError, match="unsupported geometry"):
         to_polygon(12345)
+
+
+def test_to_polygon_from_geojson_string():
+    from cubexpress.geo.construct import to_polygon
+    import shapely
+    texto = '{"type": "Polygon", "coordinates": [[[0,0],[1,0],[1,1],[0,1],[0,0]]]}'
+    assert isinstance(to_polygon(texto), shapely.Polygon)
+
+
+def test_to_polygon_from_feature_collection_string():
+    from cubexpress.geo.construct import to_polygon
+    import shapely
+    texto = ('{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, '
+             '"geometry": {"type": "Polygon", "coordinates": [[[0,0],[1,0],[1,1],[0,1],[0,0]]]}}]}')
+    assert isinstance(to_polygon(texto), shapely.Polygon)
+
+
+def test_to_polygon_rejects_malformed_geojson_string():
+    from cubexpress.geo.construct import to_polygon
+    with pytest.raises(ValueError, match="GeoJSON string"):
+        to_polygon("{esto no es json}")
+
+
+def test_to_polygon_feature_collection_unions_all_features():
+    from cubexpress.geo.construct import to_polygon
+    import shapely
+    fc = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "Polygon", "coordinates": [[[0,0],[1,0],[1,1],[0,1],[0,0]]]}},
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "Polygon", "coordinates": [[[2,2],[3,2],[3,3],[2,3],[2,2]]]}},
+    ]}
+    p = to_polygon(fc)
+    assert isinstance(p, shapely.MultiPolygon)
+    assert len(p.geoms) == 2
+    assert p.area == pytest.approx(2.0)
+
+
+def test_to_polygon_message_shows_the_geopandas_line():
+    from cubexpress.geo.construct import to_polygon
+    with pytest.raises(TypeError, match=r"gdf\.geometry\.iloc\[0\]"):
+        to_polygon(None)

@@ -131,37 +131,47 @@ def to_polygon(
     Accepts:
       - a shapely Polygon or MultiPolygon (returned as-is)
       - a WKT string: "POLYGON ((lon lat, ...))"
+      - a GeoJSON string: '{"type": "Polygon", ...}'
       - a GeoJSON geometry dict: {"type": "Polygon", "coordinates": [...]}
       - a GeoJSON Feature dict: {"type": "Feature", "geometry": {...}}
-      - a GeoJSON FeatureCollection dict: uses the FIRST feature's geometry
+      - a GeoJSON FeatureCollection dict: all features are unioned
 
-    Lets the user pass whatever they have on hand without converting first.
+    It absorbs formats, not sources. A GeoDataFrame, a GeoSeries or a file path are
+    sources: convert them first (the error message shows the one line that does it).
 
     Args:
-        geometry: a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict.
+        geometry: a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict or string.
 
     Returns:
         A shapely Polygon or MultiPolygon.
 
     Raises:
         TypeError: if the input type is unsupported or yields a non-polygon.
-        ValueError: if a WKT string or GeoJSON dict can't be parsed.
+        ValueError: if a WKT or GeoJSON string can't be parsed.
     """
     # already shapely
     if isinstance(geometry, (shapely.Polygon, shapely.MultiPolygon)):
         return geometry
 
-    # WKT string
+    # WKT string or GeoJSON string
     if isinstance(geometry, str):
-        from shapely import wkt
+        if geometry.lstrip().startswith("{"):
+            import json
 
-        try:
-            geom = wkt.loads(geometry)
-        except Exception as exc:
-            raise ValueError(f"could not parse WKT string: {exc}") from exc
-        if not isinstance(geom, (shapely.Polygon, shapely.MultiPolygon)):
-            raise TypeError(f"WKT parsed to {geom.geom_type}, expected Polygon/MultiPolygon.")
-        return geom
+            try:
+                geometry = json.loads(geometry)
+            except Exception as exc:
+                raise ValueError(f"could not parse GeoJSON string: {exc}") from exc
+        else:
+            from shapely import wkt
+
+            try:
+                geom = wkt.loads(geometry)
+            except Exception as exc:
+                raise ValueError(f"could not parse WKT string: {exc}") from exc
+            if not isinstance(geom, (shapely.Polygon, shapely.MultiPolygon)):
+                raise TypeError(f"WKT parsed to {geom.geom_type}, expected Polygon/MultiPolygon.")
+            return geom
 
     # GeoJSON dict
     if isinstance(geometry, dict):
@@ -172,19 +182,20 @@ def to_polygon(
             feats = geometry.get("features", [])
             if not feats:
                 raise ValueError("FeatureCollection has no features.")
-            geom_dict = feats[0]["geometry"]
+            geom = shapely.union_all([shape(f["geometry"]) for f in feats])
         elif gtype == "Feature":
-            geom_dict = geometry["geometry"]
+            geom = shape(geometry["geometry"])
         else:
-            geom_dict = geometry  # assume it's a geometry dict
-        geom = shape(geom_dict)
+            geom = shape(geometry)  # assume it's a geometry dict
         if not isinstance(geom, (shapely.Polygon, shapely.MultiPolygon)):
             raise TypeError(f"GeoJSON is a {geom.geom_type}, expected Polygon/MultiPolygon.")
         return geom
 
     raise TypeError(
-        f"unsupported geometry input: {type(geometry).__name__}. "
-        f"Pass a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict."
+        f"unsupported geometry input: {type(geometry).__name__}. Pass a shapely "
+        f"(Multi)Polygon, a WKT string, or a GeoJSON dict/string. From geopandas use "
+        f"gdf.geometry.iloc[0] (one feature) or gdf.union_all() (the whole layer); "
+        f"from a file use geopandas.read_file(path).geometry.iloc[0]."
     )
 
 
