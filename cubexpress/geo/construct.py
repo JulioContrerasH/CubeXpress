@@ -288,7 +288,7 @@ def polygon_to_rt(
 
     # Decide target_crs: the input CRS when it is already projected, auto-UTM when geographic
     if target_crs is None:
-        from cubexpress.geo.transform import _parsed_crs
+        from cubexpress.geo.transform import _gee_crs, _parsed_crs
 
         parsed = _parsed_crs(crs)
         if parsed.is_geographic:
@@ -299,10 +299,10 @@ def polygon_to_rt(
                 lon_c, lat_c = t.transform(geometry.centroid.x, geometry.centroid.y)
             target_crs = _utm_zone_epsg(lon_c, lat_c)
         else:
-            # Keep the input CRS, but in its canonical code: a GeoParquet declares PROJJSON,
-            # and Earth Engine only takes EPSG or WKT1.
-            epsg = parsed.to_epsg()
-            target_crs = f"EPSG:{epsg}" if epsg else crs
+            # Keep the input CRS, in the spelling Earth Engine accepts: a GeoParquet declares
+            # PROJJSON, and a WKT1 is respected as is, which is the escape hatch for a code
+            # Earth Engine does not know yet (Equi7, for example).
+            target_crs = _gee_crs(crs)
 
     # Reproject FULL polygon (not just bounds) to target_crs
     if crs == target_crs:
