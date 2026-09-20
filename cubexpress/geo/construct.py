@@ -83,9 +83,9 @@ def _pixel_size(crs: str, scale: float, latitude: float) -> tuple[float, float]:
     (metres, which is how everyone reads a pixel size) is converted at that latitude, and a
     value below 1 is taken as degrees already.
     """
-    from cubexpress.geo.transform import _validated_crs, metres_to_degrees
+    from cubexpress.geo.transform import _parsed_crs, metres_to_degrees
 
-    if _validated_crs(crs).is_geographic and scale >= 1:
+    if _parsed_crs(crs).is_geographic and scale >= 1:
         scale_x, scale_y = metres_to_degrees(scale, latitude)
         return scale_x, -scale_y
     return scale, -scale

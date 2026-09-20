@@ -151,31 +151,54 @@ def test_metres_to_degrees_at_equator_are_close():
 
 # --- Validation: the CRS must be one Earth Engine can parse ---
 
-def test_wkt1_crs_accepted():
+def test_wkt1_crs_canonicalized():
     wkt1 = pyproj.CRS.from_epsg(32718).to_wkt(version="WKT1_GDAL")
     rt = RasterTransform(
         crs=wkt1, translate_x=0, translate_y=0,
         scale_x=10, scale_y=-10, width=512, height=512,
     )
-    assert rt.crs == wkt1
+    assert rt.crs == "EPSG:32718"
 
 
-def test_wkt2_crs_rejected():
+def test_wkt2_crs_canonicalized():
     wkt2 = pyproj.CRS.from_epsg(32718).to_wkt()  # pyproj returns WKT2 by default
-    with pytest.raises(ValueError, match="Earth Engine"):
-        RasterTransform(
-            crs=wkt2, translate_x=0, translate_y=0,
-            scale_x=10, scale_y=-10, width=512, height=512,
-        )
+    rt = RasterTransform(
+        crs=wkt2, translate_x=0, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    assert rt.crs == "EPSG:32718"
 
 
-def test_proj4_crs_rejected():
+def test_proj4_crs_canonicalized():
     proj4 = pyproj.CRS.from_epsg(32718).to_proj4()
-    with pytest.raises(ValueError, match="Earth Engine"):
-        RasterTransform(
-            crs=proj4, translate_x=0, translate_y=0,
-            scale_x=10, scale_y=-10, width=512, height=512,
-        )
+    rt = RasterTransform(
+        crs=proj4, translate_x=0, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    assert rt.crs == "EPSG:32718"
+
+
+def test_projjson_crs_canonicalized():
+    projjson = pyproj.CRS.from_epsg(32718).to_json()   # what a GeoParquet stores
+    rt = RasterTransform(
+        crs=projjson, translate_x=0, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    assert rt.crs == "EPSG:32718"
+
+
+def test_custom_crs_without_epsg_becomes_wkt1():
+    """A CRS written by hand, with no standard code, goes to Earth Engine as WKT1."""
+    local = pyproj.CRS.from_proj4(
+        "+proj=tmerc +lat_0=-10 +lon_0=-76 +k=0.9999 +x_0=100000 +y_0=0 "
+        "+datum=WGS84 +units=m +no_defs"
+    )
+    assert pyproj.CRS.from_user_input(local.to_wkt()).to_epsg() is None   # sanity
+    rt = RasterTransform(
+        crs=local.to_proj4(), translate_x=100000, translate_y=0,
+        scale_x=10, scale_y=-10, width=512, height=512,
+    )
+    assert rt.crs.startswith("PROJCS[")     # WKT1, que es lo que GEE acepta
 
 
 def test_unknown_epsg_rejected():

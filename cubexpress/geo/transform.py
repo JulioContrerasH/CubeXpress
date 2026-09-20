@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 from dataclasses import dataclass
 
-_WKT1_PREFIXES = ("PROJCS", "GEOGCS", "GEOCCS", "COMPD_CS")
 _NUMERIC_FIELDS = ("translate_x", "translate_y", "scale_x", "scale_y", "shear_x", "shear_y")
 
 
@@ -25,21 +24,18 @@ def _parsed_crs(value: str):
 
 
 @functools.lru_cache(maxsize=64)
-def _validated_crs(value: str):
-    """Return the parsed CRS if Earth Engine can take it, raise otherwise.
+def _gee_crs(value: str) -> str:
+    """The spelling Earth Engine accepts for this CRS.
 
-    Earth Engine accepts standard codes ("EPSG:32718") or WKT version 1. It rejects WKT2
-    (what pyproj returns by default) and PROJ strings. The cache keeps this free: there are a
-    handful of distinct CRS values per run, and parsing one costs ~190 microseconds.
+    Whatever pyproj can parse becomes its standard code ("EPSG:32718"). A CRS with no code,
+    like one written by hand, is re-emitted as WKT version 1, the other format Earth Engine
+    takes. Cached: the conversion costs ~0.6 ms once per distinct CRS, and nothing after.
     """
     crs = _parsed_crs(value)
-
-    text = value.strip().upper()
-    if not (text.startswith("EPSG:") or text.split("[", 1)[0] in _WKT1_PREFIXES):
-        raise ValueError(
-            f"crs is not a format Earth Engine accepts (use EPSG:XXXX or WKT1): {value[:40]!r}"
-        )
-    return crs
+    epsg = crs.to_epsg()
+    if epsg:
+        return f"EPSG:{epsg}"
+    return crs.to_wkt(version="WKT1_GDAL")
 
 
 def metres_to_degrees(scale_m: float, latitude: float) -> tuple[float, float]:
@@ -83,7 +79,10 @@ class RasterTransform:
     def __post_init__(self) -> None:
         if not isinstance(self.crs, str):
             raise TypeError(f"crs must be str, got {type(self.crs).__name__}")
-        crs = _validated_crs(self.crs)
+        canonical = _gee_crs(self.crs)
+        if canonical != self.crs:
+            object.__setattr__(self, "crs", canonical)
+        crs = _parsed_crs(self.crs)
         for name in _NUMERIC_FIELDS:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)):
