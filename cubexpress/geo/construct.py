@@ -192,7 +192,7 @@ def to_polygon(
         return geom
 
     raise TypeError(
-        f"unsupported geometry input: {type(geometry).__name__}. Pass a shapely "
+        f"unsupported geometry input: {type(geometry).__name__}. Expected a shapely "
         f"(Multi)Polygon, a WKT string, or a GeoJSON dict/string. From geopandas use "
         f"gdf.geometry.iloc[0] (one feature) or gdf.union_all() (the whole layer); "
         f"from a file use geopandas.read_file(path).geometry.iloc[0]."
