@@ -1001,11 +1001,10 @@ projected to the appropriate UTM zone for the given coordinates.</p>
 <a id="cubexpress.bbox_to_rt"></a>
     <div class="doc doc-contents first">
 
-        <p>Build a RasterTransform covering the given bbox at <code>scale</code> units/pixel.</p>
-<p>The output raster's upper-left corner is anchored at (xmin, ymax). If the
-bbox dimensions aren't exact multiples of <code>scale</code>, the resulting raster
-extends slightly beyond <code>xmax</code> and below <code>ymin</code> (rounded up) to guarantee
-full coverage of the input bbox.</p>
+        <p>Build a RasterTransform covering the given bbox at <code>scale</code> metres per pixel.</p>
+<p>The output raster's upper-left corner is anchored at (xmin, ymax). If the bbox dimensions
+aren't exact multiples of the pixel size, the resulting raster extends slightly beyond
+<code>xmax</code> and below <code>ymin</code> (rounded up) to guarantee full coverage of the input bbox.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1108,7 +1107,9 @@ full coverage of the input bbox.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pixel size in CRS units (typically meters for projected CRS).</p>
+                <p>Pixel size in metres. For a geographic CRS it is converted to degrees at the
+bbox latitude, because the two axes need different values. A value below 1 is
+taken as degrees already.</p>
               </div>
             </td>
             <td>
@@ -1197,7 +1198,8 @@ or a GeoJSON dict or string. A MultiPolygon is covered by the bbox of all its pa
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pixel size in units of target_crs (meters for UTM, degrees for 4326).</p>
+                <p>Pixel size in metres. For a geographic target it is converted to degrees at the
+polygon's latitude. A value below 1 is taken as degrees already.</p>
               </div>
             </td>
             <td>
@@ -1229,7 +1231,8 @@ or a GeoJSON dict or string. A MultiPolygon is covered by the bbox of all its pa
             </td>
             <td>
               <div class="doc-md-description">
-                <p>CRS of the output. None → auto-UTM by polygon centroid.</p>
+                <p>CRS of the output. None → the input CRS when it is already projected, or
+the automatic UTM zone by centroid when the input is geographic.</p>
               </div>
             </td>
             <td>
