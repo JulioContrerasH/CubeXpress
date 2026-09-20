@@ -1154,20 +1154,11 @@ full coverage of the input bbox.</p>
     <div class="doc doc-contents first">
 
         <p>Build a RasterTransform that covers a polygon's bbox.</p>
-<p>Earth Engine downloads need an axis-aligned raster grid, so this function
-takes a Polygon and returns a RasterTransform fitted to it.</p>
-<p>Input must be a shapely.Polygon. Convert from other formats before calling:</p>
-<div class="highlight"><pre><span></span><code># From GeoJSON dict
-from shapely.geometry import shape
-poly = shape(geojson_dict)
-
-# From WKT
-from shapely import wkt
-poly = wkt.loads(wkt_string)
-
-# From GeoDataFrame (single feature)
-poly = gdf.geometry.iloc[0]
-</code></pre></div>
+<p>Earth Engine downloads need an axis-aligned raster grid, so this function takes a
+polygon and returns a RasterTransform fitted to it. The polygon gives the area, the
+<code>scale</code> gives the pixel size, and the dimensions come from dividing one by the other.</p>
+<p>Accepts anything <code>to_polygon</code> accepts: a shapely Polygon or MultiPolygon, a WKT string,
+or a GeoJSON dict or string. A MultiPolygon is covered by the bbox of all its parts.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1190,8 +1181,7 @@ poly = gdf.geometry.iloc[0]
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A shapely.Polygon. MultiPolygon is not supported — split via
-.geoms and call this function once per part.</p>
+                <p>a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict or string.</p>
               </div>
             </td>
             <td>
@@ -1288,7 +1278,7 @@ poly = gdf.geometry.iloc[0]
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if geometry is not a shapely.Polygon.</p>
+                <p>if the input is not a polygon or cannot be parsed as one.</p>
               </div>
             </td>
           </tr>
