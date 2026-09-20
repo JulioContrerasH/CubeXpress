@@ -2,8 +2,46 @@
 
 from __future__ import annotations
 
+import functools
 import pathlib
 from typing import Any
+
+
+@functools.lru_cache(maxsize=64)
+def _gee_crs_code(crs: str) -> str:
+    """The CRS to send Earth Engine: the code when it parses it, else its WKT1.
+
+    Earth Engine's EPSG database is older than the registry, so a code can be valid in pyproj
+    and unknown to Earth Engine (Equi7 South America, EPSG:27707, registered in 2024). One
+    probe per distinct CRS, cached, so a run with 250k rows and one CRS probes once.
+    """
+    import ee
+
+    try:
+        ee.Projection(crs).getInfo()
+        return crs
+    except Exception:
+        return _as_wkt1(crs)
+
+
+def _as_wkt1(crs: str) -> str:
+    """The same CRS written as WKT version 1, which Earth Engine does accept."""
+    try:
+        import pyproj
+
+        return pyproj.CRS.from_user_input(crs).to_wkt(version="WKT1_GDAL")
+    except Exception:
+        return crs
+
+
+def _with_gee_crs(manifest: dict[str, Any]) -> dict[str, Any]:
+    """A copy of the manifest whose grid carries a CRS Earth Engine can parse."""
+    grid = manifest.get("grid")
+    if not grid or not grid.get("crsCode"):
+        return manifest
+    request = dict(manifest)
+    request["grid"] = {**grid, "crsCode": _gee_crs_code(grid["crsCode"])}
+    return request
 
 
 def download_manifest(
@@ -49,11 +87,11 @@ def download_manifest(
 
     # Dispatch to the correct EE endpoint
     if "assetId" in manifest:
-        result = ee.data.getPixels(manifest)
+        result = ee.data.getPixels(_with_gee_crs(manifest))
     else:
         # 'expression' can be either a serialized JSON string OR an ee.Image instance.
         # ee.data.computePixels accepts both, but if it's a string we must deserialize.
-        request = dict(manifest)
+        request = _with_gee_crs(manifest)
         if isinstance(request["expression"], str):
             import json
 

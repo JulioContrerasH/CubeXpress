@@ -207,3 +207,49 @@ def test_download_manifest_real_s2_chip_as_numpy(require_ee):
     assert isinstance(arr, np.ndarray)
     assert arr.shape == (32, 32)
     assert arr.dtype.names == ("B4", "B3", "B2")  # structured array: one field per band
+
+# --- El CRS que se le manda a GEE ---
+
+def test_supported_code_is_sent_as_is(monkeypatch):
+    import ee
+    import cubexpress.download.manifest as m
+
+    class FakeProjection:
+        def __init__(self, crs): self.crs = crs
+        def getInfo(self): return {}
+
+    monkeypatch.setattr(ee, "Projection", FakeProjection)
+    m._gee_crs_code.cache_clear()
+    assert m._gee_crs_code("EPSG:32718") == "EPSG:32718"
+
+
+def test_unsupported_code_falls_back_to_wkt1(monkeypatch):
+    """GEE no conoce ciertos códigos; se le manda el WKT1 del mismo CRS."""
+    import ee
+    import cubexpress.download.manifest as m
+
+    class FakeProjection:
+        def __init__(self, crs): self.crs = crs
+        def getInfo(self): raise Exception("Could not parse 'EPSG:27707'.")
+
+    monkeypatch.setattr(ee, "Projection", FakeProjection)
+    m._gee_crs_code.cache_clear()
+    salida = m._gee_crs_code("EPSG:27707")          # Equi7 South America
+    assert salida.startswith("PROJCS[")
+    assert "Equi7" in salida
+
+
+def test_grid_crs_is_replaced_in_the_manifest(monkeypatch):
+    import ee
+    import cubexpress.download.manifest as m
+
+    class FakeProjection:
+        def __init__(self, crs): self.crs = crs
+        def getInfo(self): raise Exception("Could not parse")
+
+    monkeypatch.setattr(ee, "Projection", FakeProjection)
+    m._gee_crs_code.cache_clear()
+    original = {"grid": {"crsCode": "EPSG:27707", "dimensions": {"width": 2, "height": 2}}}
+    salida = m._with_gee_crs(original)
+    assert salida["grid"]["crsCode"].startswith("PROJCS[")
+    assert original["grid"]["crsCode"] == "EPSG:27707"      # el original no se toca
