@@ -130,6 +130,25 @@ def test_int_numeric_fields_accepted():
     assert rt.scale_x == 10
 
 
+# --- The metres-to-degrees conversion ---
+
+def test_metres_to_degrees_at_lat_minus_12():
+    from cubexpress.geo.transform import metres_to_degrees
+    lon_deg, lat_deg = metres_to_degrees(30, -12.0)
+    assert lon_deg == pytest.approx(0.000275, abs=1e-6)
+    assert lat_deg == pytest.approx(0.000271, abs=1e-6)
+    assert lon_deg > lat_deg          # a 12 grados del ecuador, la longitud son más grados
+
+
+def test_metres_to_degrees_at_equator_are_close():
+    """En el elipsoide no son idénticos ni en el ecuador, pero difieren menos del 1%."""
+    from cubexpress.geo.transform import metres_to_degrees
+    lon_deg, lat_deg = metres_to_degrees(30, 0.0)
+    assert lon_deg == pytest.approx(0.000269, abs=1e-6)
+    assert lat_deg == pytest.approx(0.000271, abs=1e-6)
+    assert abs(lon_deg - lat_deg) / lat_deg < 0.01
+
+
 # --- Validation: the CRS must be one Earth Engine can parse ---
 
 def test_wkt1_crs_accepted():

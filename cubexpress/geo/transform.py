@@ -10,6 +10,21 @@ _NUMERIC_FIELDS = ("translate_x", "translate_y", "scale_x", "scale_y", "shear_x"
 
 
 @functools.lru_cache(maxsize=64)
+def _parsed_crs(value: str):
+    """Parse a CRS with pyproj, whatever its spelling (EPSG, WKT, PROJJSON, PROJ).
+
+    This is for the *input* CRS: a GeoParquet, for example, declares its CRS as PROJJSON, and
+    that is fine here because it is only used locally with pyproj.
+    """
+    from pyproj import CRS
+
+    try:
+        return CRS.from_user_input(value)
+    except Exception as exc:
+        raise ValueError(f"crs is not a valid CRS: {value!r}") from exc
+
+
+@functools.lru_cache(maxsize=64)
 def _validated_crs(value: str):
     """Return the parsed CRS if Earth Engine can take it, raise otherwise.
 
@@ -17,12 +32,7 @@ def _validated_crs(value: str):
     (what pyproj returns by default) and PROJ strings. The cache keeps this free: there are a
     handful of distinct CRS values per run, and parsing one costs ~190 microseconds.
     """
-    from pyproj import CRS
-
-    try:
-        crs = CRS.from_user_input(value)
-    except Exception as exc:
-        raise ValueError(f"crs is not a valid CRS: {value!r}") from exc
+    crs = _parsed_crs(value)
 
     text = value.strip().upper()
     if not (text.startswith("EPSG:") or text.split("[", 1)[0] in _WKT1_PREFIXES):
@@ -32,7 +42,7 @@ def _validated_crs(value: str):
     return crs
 
 
-def _metres_in_degrees(scale_m: float, latitude: float) -> tuple[float, float]:
+def metres_to_degrees(scale_m: float, latitude: float) -> tuple[float, float]:
     """Pixel size in degrees that matches `scale_m` metres at that latitude.
 
     Longitude shrinks with the cosine of the latitude, latitude does not. Measured with the
@@ -83,7 +93,7 @@ class RasterTransform:
                 raise TypeError(f"{name} must be int, got {type(value).__name__}")
         if crs.is_geographic and max(abs(self.scale_x), abs(self.scale_y)) >= 1:
             scale_m = max(abs(self.scale_x), abs(self.scale_y))
-            lon_deg, lat_deg = _metres_in_degrees(scale_m, self.translate_y)
+            lon_deg, lat_deg = metres_to_degrees(scale_m, self.translate_y)
             raise ValueError(
                 f"scale is in degrees for {self.crs}, not metres. For {scale_m:g} m at "
                 f"latitude {self.translate_y:g} use scale_x={lon_deg:.6f}, scale_y=-{lat_deg:.6f}"

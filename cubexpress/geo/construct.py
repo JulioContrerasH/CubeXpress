@@ -76,6 +76,21 @@ def point_to_rt(
     )
 
 
+def _pixel_size(crs: str, scale: float, latitude: float) -> tuple[float, float]:
+    """Pixel size in the CRS units, as (scale_x, scale_y) with scale_y negative.
+
+    A geographic CRS takes degrees, and nobody thinks in degrees. So a scale of 1 or more
+    (metres, which is how everyone reads a pixel size) is converted at that latitude, and a
+    value below 1 is taken as degrees already.
+    """
+    from cubexpress.geo.transform import _validated_crs, metres_to_degrees
+
+    if _validated_crs(crs).is_geographic and scale >= 1:
+        scale_x, scale_y = metres_to_degrees(scale, latitude)
+        return scale_x, -scale_y
+    return scale, -scale
+
+
 def bbox_to_rt(
     xmin: float,
     ymin: float,
@@ -84,12 +99,11 @@ def bbox_to_rt(
     crs: str,
     scale: float,
 ) -> RasterTransform:
-    """Build a RasterTransform covering the given bbox at `scale` units/pixel.
+    """Build a RasterTransform covering the given bbox at `scale` metres per pixel.
 
-    The output raster's upper-left corner is anchored at (xmin, ymax). If the
-    bbox dimensions aren't exact multiples of `scale`, the resulting raster
-    extends slightly beyond `xmax` and below `ymin` (rounded up) to guarantee
-    full coverage of the input bbox.
+    The output raster's upper-left corner is anchored at (xmin, ymax). If the bbox dimensions
+    aren't exact multiples of the pixel size, the resulting raster extends slightly beyond
+    `xmax` and below `ymin` (rounded up) to guarantee full coverage of the input bbox.
 
     Args:
         xmin: Minimum x coordinate (longitude or easting) in `crs`.
@@ -97,7 +111,9 @@ def bbox_to_rt(
         xmax: Maximum x coordinate in `crs`.
         ymax: Maximum y coordinate in `crs`.
         crs: Coordinate Reference System (EPSG code or WKT).
-        scale: Pixel size in CRS units (typically meters for projected CRS).
+        scale: Pixel size in metres. For a geographic CRS it is converted to degrees at the
+            bbox latitude, because the two axes need different values. A value below 1 is
+            taken as degrees already.
 
     Returns:
         RasterTransform whose bbox contains the input bbox at the given scale.
@@ -109,15 +125,17 @@ def bbox_to_rt(
     if ymin >= ymax:
         raise ValueError(f"ymin must be < ymax, got ymin={ymin}, ymax={ymax}")
 
-    width = math.ceil((xmax - xmin) / scale)
-    height = math.ceil((ymax - ymin) / scale)
+    scale_x, scale_y = _pixel_size(crs, scale, (ymin + ymax) / 2)
+
+    width = math.ceil((xmax - xmin) / scale_x)
+    height = math.ceil((ymax - ymin) / abs(scale_y))
 
     return RasterTransform(
         crs=crs,
         translate_x=xmin,
         translate_y=ymax,
-        scale_x=scale,
-        scale_y=-scale,
+        scale_x=scale_x,
+        scale_y=scale_y,
         width=width,
         height=height,
     )
@@ -216,9 +234,11 @@ def polygon_to_rt(
 
     Args:
         geometry: a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict or string.
-        scale: Pixel size in units of target_crs (meters for UTM, degrees for 4326).
+        scale: Pixel size in metres. For a geographic target it is converted to degrees at the
+            polygon's latitude. A value below 1 is taken as degrees already.
         crs: CRS of the input geometry. Default 'EPSG:4326'.
-        target_crs: CRS of the output. None → auto-UTM by polygon centroid.
+        target_crs: CRS of the output. None → the input CRS when it is already projected, or
+            the automatic UTM zone by centroid when the input is geographic.
 
     Returns:
         RasterTransform in target_crs covering the polygon's bbox.
@@ -247,14 +267,23 @@ def polygon_to_rt(
                 f"Did you forget to pass crs=? (e.g. crs='EPSG:32718')"
             )
 
-    # Decide target_crs (auto-UTM by centroid if None)
+    # Decide target_crs: the input CRS when it is already projected, auto-UTM when geographic
     if target_crs is None:
-        if crs == "EPSG:4326":
-            lon_c, lat_c = geometry.centroid.x, geometry.centroid.y
+        from cubexpress.geo.transform import _parsed_crs
+
+        parsed = _parsed_crs(crs)
+        if parsed.is_geographic:
+            if crs == "EPSG:4326":
+                lon_c, lat_c = geometry.centroid.x, geometry.centroid.y
+            else:
+                t = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+                lon_c, lat_c = t.transform(geometry.centroid.x, geometry.centroid.y)
+            target_crs = _utm_zone_epsg(lon_c, lat_c)
         else:
-            t = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
-            lon_c, lat_c = t.transform(geometry.centroid.x, geometry.centroid.y)
-        target_crs = _utm_zone_epsg(lon_c, lat_c)
+            # Keep the input CRS, but in its canonical code: a GeoParquet declares PROJJSON,
+            # and Earth Engine only takes EPSG or WKT1.
+            epsg = parsed.to_epsg()
+            target_crs = f"EPSG:{epsg}" if epsg else crs
 
     # Reproject FULL polygon (not just bounds) to target_crs
     if crs == target_crs:

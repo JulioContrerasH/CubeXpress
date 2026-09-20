@@ -35,7 +35,7 @@ from cubexpress.geo.construct import (
 )
 from cubexpress.geo.geometry import point_to_geometry, rt_to_geometry
 from cubexpress.geo.tiling import split_transform
-from cubexpress.geo.transform import RasterTransform
+from cubexpress.geo.transform import RasterTransform, metres_to_degrees
 from cubexpress.request.builders import build_from_points
 from cubexpress.request.row import RequestRow
 from cubexpress.request.table import RequestTable
@@ -43,6 +43,7 @@ from cubexpress.request.table import RequestTable
 __all__ = [
     # geo
     "RasterTransform",
+    "metres_to_degrees",
     "point_to_rt",
     "bbox_to_rt",
     "polygon_to_rt",

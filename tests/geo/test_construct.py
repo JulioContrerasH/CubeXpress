@@ -331,6 +331,39 @@ def test_polygon_to_rt_override_webmercator():
     assert rt.crs == "EPSG:3857"
 
 
+def test_polygon_to_rt_target_4326_accepts_metres():
+    """In a geographic target the scale is metres: the package converts it."""
+    rt = polygon_to_rt(LIMA_WGS84, scale=30, target_crs="EPSG:4326")
+    assert rt.crs == "EPSG:4326"
+    assert rt.scale_x == pytest.approx(0.000275, abs=1e-6)
+    assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
+    assert rt.width > 100        # 30 m, no 30 grados
+
+
+def test_polygon_to_rt_projected_input_keeps_its_crs():
+    """A projected input stays in its own CRS: nothing moves without asking."""
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:24878", always_xy=True)
+    poly_psad = shp_transform(transformer.transform, LIMA_WGS84)
+    rt = polygon_to_rt(poly_psad, scale=30, crs="EPSG:24878")
+    assert rt.crs == "EPSG:24878"
+
+
+def test_polygon_to_rt_canonicalizes_a_projjson_input():
+    """A GeoParquet declares PROJJSON, which is not an Earth Engine format."""
+    import pyproj
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:32718", always_xy=True)
+    poly_utm = shp_transform(transformer.transform, LIMA_WGS84)
+    projjson = pyproj.CRS.from_epsg(32718).to_json()
+    rt = polygon_to_rt(poly_utm, scale=30, crs=projjson)
+    assert rt.crs == "EPSG:32718"
+
+
+def test_bbox_to_rt_geographic_converts_metres():
+    rt = bbox_to_rt(-77.10, -12.10, -77.00, -12.00, crs="EPSG:4326", scale=30)
+    assert rt.scale_x == pytest.approx(0.000275, abs=1e-6)
+    assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
+
+
 # --- polygon_to_rt: invariance across formats and CRS ---
 
 _EXTS = [".shp", ".gpkg", ".geojson", ".parquet", ".kml", ".wkt", ".wkb", ".csv"]
