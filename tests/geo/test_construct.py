@@ -315,7 +315,7 @@ def test_polygon_to_rt_default_auto_utm():
 
 
 def test_polygon_to_rt_override_4326():
-    rt = polygon_to_rt(LIMA_WGS84, scale=0.0001, target_crs="EPSG:4326")
+    rt = polygon_to_rt(LIMA_WGS84, scale=0.0001, target_crs="EPSG:4326", scale_unit="deg")
     assert rt.crs == "EPSG:4326"
 
 
@@ -362,6 +362,63 @@ def test_bbox_to_rt_geographic_converts_metres():
     rt = bbox_to_rt(-77.10, -12.10, -77.00, -12.00, crs="EPSG:4326", scale=30)
     assert rt.scale_x == pytest.approx(0.000275, abs=1e-6)
     assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
+
+
+# --- the scale unit is explicit: no guessing from the number ---
+
+def test_sub_metre_scale_is_still_metres():
+    """0.6 m (an aerial photo) in a geographic target means 0.6 metres, not 0.6 degrees."""
+    rt = bbox_to_rt(-77.10, -12.10, -77.00, -12.00, crs="EPSG:4326", scale=0.6)
+    assert rt.scale_x == pytest.approx(5.51e-06, rel=1e-3)
+    assert rt.width > 10_000
+
+
+def test_target_4326_accepts_degrees():
+    """scale_unit="deg" takes the number as degrees, which is how a 4326 product is gridded."""
+    rt = polygon_to_rt(LIMA_WGS84, scale=0.000269, target_crs="EPSG:4326", scale_unit="deg")
+    assert rt.scale_x == 0.000269
+    assert rt.scale_y == -0.000269
+    assert rt.crs == "EPSG:4326"
+
+
+def test_degrees_cover_the_climate_grids():
+    """ERA5 grids at 0.25 degrees and MODIS CMG at 0.05 are asked with the same flag."""
+    rt = bbox_to_rt(-77.1, -12.1, -77.0, -12.0, crs="EPSG:4326", scale=0.05, scale_unit="deg")
+    assert rt.scale_x == 0.05
+    assert rt.width == 2
+
+
+def test_metres_below_the_gee_floor_are_stopped():
+    """0.05 m does not exist (the finest is 0.6 m): likely a MODIS CMG grid in degrees."""
+    with pytest.raises(ValueError, match="finer than any pixel"):
+        bbox_to_rt(-77.1, -12.1, -77.0, -12.0, crs="EPSG:4326", scale=0.05)
+    with pytest.raises(ValueError) as info:
+        bbox_to_rt(-77.1, -12.1, -77.0, -12.0, crs="EPSG:4326", scale=0.05)
+    assert 'scale_unit="deg"' in str(info.value)
+
+
+def test_era5_scale_in_metres_is_stopped():
+    """0.25 is real in both units (ERA5 in degrees); in metres it does not exist."""
+    with pytest.raises(ValueError, match="finer than any pixel"):
+        bbox_to_rt(-77.1, -12.1, -77.0, -12.0, crs="EPSG:4326", scale=0.25)
+
+
+def test_degrees_above_the_coarsest_grid_are_stopped():
+    """30 degrees is 3339 km per pixel: the coarsest grid is NCEP at 2.5."""
+    with pytest.raises(ValueError, match="coarser than any grid"):
+        bbox_to_rt(-77.1, -12.1, -77.0, -12.0, crs="EPSG:4326", scale=30, scale_unit="deg")
+    rt = bbox_to_rt(-12.5, -6.5, -12.0, -6.0, crs="EPSG:4326", scale=2.5, scale_unit="deg")
+    assert rt.scale_x == 2.5
+
+
+def test_deg_with_a_projected_crs_is_an_error():
+    with pytest.raises(ValueError, match="projected"):
+        bbox_to_rt(500000, 8600000, 501000, 8601000, crs="EPSG:32718", scale=0.5, scale_unit="deg")
+
+
+def test_unknown_scale_unit_is_an_error():
+    with pytest.raises(ValueError, match="scale_unit must be"):
+        bbox_to_rt(-77.1, -12.1, -77.0, -12.0, crs="EPSG:4326", scale=30, scale_unit="metros")
 
 
 # --- builders: input types are checked on the way in ---
@@ -504,16 +561,16 @@ def test_polygon_to_rt_accepts_geojson_dict():
         "type": "Polygon",
         "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
     }
-    assert polygon_to_rt(geojson, scale=0.1).crs.startswith("EPSG:")
+    assert polygon_to_rt(geojson, scale=30).crs.startswith("EPSG:")
 
 
 def test_polygon_to_rt_accepts_geojson_string():
     texto = '{"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}'
-    assert polygon_to_rt(texto, scale=0.1).crs.startswith("EPSG:")
+    assert polygon_to_rt(texto, scale=30).crs.startswith("EPSG:")
 
 
 def test_polygon_to_rt_accepts_wkt_string():
-    rt = polygon_to_rt("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", scale=0.1)
+    rt = polygon_to_rt("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", scale=30)
     assert rt.crs.startswith("EPSG:")
 
 

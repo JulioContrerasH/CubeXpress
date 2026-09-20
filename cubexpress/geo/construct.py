@@ -10,7 +10,7 @@ from pyproj.aoi import AreaOfInterest
 from pyproj.database import query_utm_crs_info
 from shapely.ops import transform as shp_transform
 
-from cubexpress.geo.transform import RasterTransform
+from cubexpress.geo.transform import MAX_DEGREES, MIN_METRES, RasterTransform
 
 
 def _require_number(name: str, value) -> None:
@@ -92,16 +92,46 @@ def point_to_rt(
     )
 
 
-def _pixel_size(crs: str, scale: float, latitude: float) -> tuple[float, float]:
+def _pixel_size(
+    crs: str, scale: float, latitude: float, unit: str = "m"
+) -> tuple[float, float]:
     """Pixel size in the CRS units, as (scale_x, scale_y) with scale_y negative.
 
-    A geographic CRS takes degrees, and nobody thinks in degrees. So a scale of 1 or more
-    (metres, which is how everyone reads a pixel size) is converted at that latitude, and a
-    value below 1 is taken as degrees already.
+    `scale` is read in metres (`unit="m"`), which is how everyone reads a pixel size, and is
+    converted at that latitude when the CRS is geographic: the two axes need different values.
+    With `unit="deg"` the value is taken as degrees already, which is what matching a grid
+    like a global 4326 product needs.
+
+    No guessing from the number: 0.6 is 0.6 metres (an aerial photo), and 0.25 is 0.25
+    degrees only when `unit="deg"` says so (a reanalysis product). Values outside what
+    Earth Engine actually serves are stopped with the conversion in the message.
     """
     from cubexpress.geo.transform import _parsed_crs, metres_to_degrees
 
-    if _parsed_crs(crs).is_geographic and scale >= 1:
+    if unit not in ("m", "deg"):
+        raise ValueError(f'scale_unit must be "m" or "deg", got {unit!r}')
+
+    if unit == "deg":
+        if not _parsed_crs(crs).is_geographic:
+            raise ValueError(
+                f'scale_unit="deg" needs a geographic CRS, but "{crs}" is projected and takes '
+                "metres"
+            )
+        if scale > MAX_DEGREES:
+            raise ValueError(
+                f"scale={scale} degrees is coarser than any grid in Earth Engine "
+                f"(2.5, NCEP/NCAR). If you meant metres, drop scale_unit=\"deg\": metres is "
+                f"the default"
+            )
+        return scale, -scale
+
+    if scale < MIN_METRES:
+        raise ValueError(
+            f"scale={scale} metres is finer than any pixel in Earth Engine (0.6 m, NAIP). "
+            f'If you meant degrees, pass scale_unit="deg" (0.05 is the MODIS CMG grid)'
+        )
+
+    if _parsed_crs(crs).is_geographic:
         scale_x, scale_y = metres_to_degrees(scale, latitude)
         return scale_x, -scale_y
     return scale, -scale
@@ -114,6 +144,7 @@ def bbox_to_rt(
     ymax: float,
     crs: str,
     scale: float,
+    scale_unit: str = "m",
 ) -> RasterTransform:
     """Build a RasterTransform covering the given bbox at `scale` metres per pixel.
 
@@ -127,9 +158,10 @@ def bbox_to_rt(
         xmax: Maximum x coordinate in `crs`.
         ymax: Maximum y coordinate in `crs`.
         crs: Coordinate Reference System (EPSG code or WKT).
-        scale: Pixel size in metres. For a geographic CRS it is converted to degrees at the
-            bbox latitude, because the two axes need different values. A value below 1 is
-            taken as degrees already.
+        scale: Pixel size in metres, or in degrees when `scale_unit="deg"`.
+        scale_unit: "m" (default) or "deg". In metres, a geographic CRS gets the value
+            converted to degrees at the bbox latitude; in degrees, the value is taken as is
+            and needs a geographic CRS.
 
     Returns:
         RasterTransform whose bbox contains the input bbox at the given scale.
@@ -143,7 +175,7 @@ def bbox_to_rt(
     if ymin >= ymax:
         raise ValueError(f"ymin must be < ymax, got ymin={ymin}, ymax={ymax}")
 
-    scale_x, scale_y = _pixel_size(crs, scale, (ymin + ymax) / 2)
+    scale_x, scale_y = _pixel_size(crs, scale, (ymin + ymax) / 2, scale_unit)
 
     width = math.ceil((xmax - xmin) / scale_x)
     height = math.ceil((ymax - ymin) / abs(scale_y))
@@ -240,6 +272,7 @@ def polygon_to_rt(
     scale: float,
     crs: str = "EPSG:4326",
     target_crs: str | None = None,
+    scale_unit: str = "m",
 ) -> RasterTransform:
     """Build a RasterTransform that covers a polygon's bbox.
 
@@ -252,8 +285,9 @@ def polygon_to_rt(
 
     Args:
         geometry: a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict or string.
-        scale: Pixel size in metres. For a geographic target it is converted to degrees at the
-            polygon's latitude. A value below 1 is taken as degrees already.
+        scale: Pixel size in metres, or in degrees when `scale_unit="deg"`.
+        scale_unit: "m" (default) or "deg". A geographic target in metres gets the value
+            converted to degrees at the polygon's latitude; in degrees it is taken as is.
         crs: CRS of the input geometry. Default 'EPSG:4326'.
         target_crs: CRS of the output. None → the input CRS when it is already projected, or
             the automatic UTM zone by centroid when the input is geographic.
@@ -312,12 +346,13 @@ def polygon_to_rt(
         poly_proj = shp_transform(transformer.transform, geometry)
         bxmin, bymin, bxmax, bymax = poly_proj.bounds
 
-    return bbox_to_rt(bxmin, bymin, bxmax, bymax, crs=target_crs, scale=scale)
+    return bbox_to_rt(bxmin, bymin, bxmax, bymax, crs=target_crs, scale=scale, scale_unit=scale_unit)
 
 
 def asset_to_rt(
     image,
     scale: float | None = None,
+    scale_unit: str = "m",
 ) -> RasterTransform:
     """Build a RasterTransform from a GEE asset or ee.Image, in its native CRS.
 
@@ -333,8 +368,10 @@ def asset_to_rt(
             Accepting ee.Image lets you build complex computed images
             (e.g. img.clip(), img1.add(img2), ic.median()) and pass them
             directly without serializing.
-        scale: Pixel size in meters of the native CRS. None → use the asset's
-            native scale (10 m for S2 B2/B3/B4/B8, 30 m for Landsat, etc.).
+        scale: Pixel size in metres of the native CRS, or in degrees when `scale_unit="deg"`
+            (useful for assets stored in 4326, like JRC Global Surface Water). None → use the
+            asset's native scale (10 m for S2 B2/B3/B4/B8, 30 m for Landsat, etc.).
+        scale_unit: "m" (default) or "deg". Only used when `scale` is given.
 
     Returns:
         RasterTransform in the image's native CRS, covering its full footprint.
@@ -394,4 +431,4 @@ def asset_to_rt(
     xmax = xmin + native_width * native_transform[0]
     ymin = ymax + native_height * native_transform[4]  # native_transform[4] is negative
 
-    return bbox_to_rt(xmin, ymin, xmax, ymax, crs=native_crs, scale=scale)
+    return bbox_to_rt(xmin, ymin, xmax, ymax, crs=native_crs, scale=scale, scale_unit=scale_unit)

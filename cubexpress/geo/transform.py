@@ -7,6 +7,12 @@ from dataclasses import dataclass
 
 _NUMERIC_FIELDS = ("translate_x", "translate_y", "scale_x", "scale_y", "shear_x", "shear_y")
 
+# The real range of pixels in Earth Engine, for the sanity checks on `scale`. Probed on
+# 2026-09-20: the finest public pixels are 0.6 m (NAIP 2023), and the coarsest grid is the
+# NCEP/NCAR reanalysis at 2.5 degrees. MIN_METRES sits at 0.5 to leave a margin.
+MIN_METRES = 0.5
+MAX_DEGREES = 2.5
+
 
 @functools.lru_cache(maxsize=64)
 def _parsed_crs(value: str):
@@ -100,7 +106,7 @@ class RasterTransform:
         for name, value in (("width", self.width), ("height", self.height)):
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{name} must be int, got {type(value).__name__}")
-        if crs.is_geographic and max(abs(self.scale_x), abs(self.scale_y)) >= 1:
+        if crs.is_geographic and max(abs(self.scale_x), abs(self.scale_y)) > MAX_DEGREES:
             scale_m = max(abs(self.scale_x), abs(self.scale_y))
             lon_deg, lat_deg = metres_to_degrees(scale_m, self.translate_y)
             raise ValueError(
