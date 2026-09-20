@@ -431,32 +431,40 @@ def test_polygon_to_rt_none_rejected():
         polygon_to_rt(None, scale=10)
 
 
-def test_polygon_to_rt_non_polygon_rejected():
-    """Anything that is not a shapely.Polygon must be rejected with a helpful message."""
-    with pytest.raises(TypeError, match="must be shapely.Polygon"):
+def test_polygon_to_rt_non_geometry_rejected():
+    """Anything that is not a geometry must be rejected with a helpful message."""
+    with pytest.raises(TypeError, match="unsupported geometry"):
         polygon_to_rt(12345, scale=10)
 
 
-def test_polygon_to_rt_geojson_dict_rejected():
-    """User must convert GeoJSON dict to shapely.Polygon themselves."""
+def test_polygon_to_rt_accepts_geojson_dict():
     geojson = {
         "type": "Polygon",
         "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
     }
-    with pytest.raises(TypeError, match="must be shapely.Polygon"):
-        polygon_to_rt(geojson, scale=10)
+    assert polygon_to_rt(geojson, scale=0.1).crs.startswith("EPSG:")
 
 
-def test_polygon_to_rt_wkt_string_rejected():
-    """User must convert WKT to shapely.Polygon themselves."""
-    with pytest.raises(TypeError, match="must be shapely.Polygon"):
-        polygon_to_rt("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", scale=10)
+def test_polygon_to_rt_accepts_geojson_string():
+    texto = '{"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}'
+    assert polygon_to_rt(texto, scale=0.1).crs.startswith("EPSG:")
 
 
-def test_polygon_to_rt_multipolygon_rejected():
-    mp = MultiPolygon([LIMA_WGS84, LIMA_WGS84])
-    with pytest.raises(TypeError, match="MultiPolygon not supported"):
-        polygon_to_rt(mp, scale=10)
+def test_polygon_to_rt_accepts_wkt_string():
+    rt = polygon_to_rt("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", scale=0.1)
+    assert rt.crs.startswith("EPSG:")
+
+
+def test_polygon_to_rt_multipolygon_uses_bbox():
+    """A MultiPolygon gives the same rt as the union of its parts."""
+    parte_b = Polygon([
+        (-76.90, -12.05), (-76.80, -12.05),
+        (-76.80, -11.95), (-76.90, -11.95), (-76.90, -12.05),
+    ])
+    rt_multi = polygon_to_rt(MultiPolygon([LIMA_WGS84, parte_b]), scale=100)
+    rt_union = polygon_to_rt(LIMA_WGS84.union(parte_b), scale=100)
+    assert rt_multi.crs == rt_union.crs
+    assert rt_multi.bbox() == rt_union.bbox()
 
 
 def test_polygon_to_rt_invalid_polygon_rejected():

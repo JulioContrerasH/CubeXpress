@@ -207,25 +207,15 @@ def polygon_to_rt(
 ) -> RasterTransform:
     """Build a RasterTransform that covers a polygon's bbox.
 
-    Earth Engine downloads need an axis-aligned raster grid, so this function
-    takes a Polygon and returns a RasterTransform fitted to it.
+    Earth Engine downloads need an axis-aligned raster grid, so this function takes a
+    polygon and returns a RasterTransform fitted to it. The polygon gives the area, the
+    `scale` gives the pixel size, and the dimensions come from dividing one by the other.
 
-    Input must be a shapely.Polygon. Convert from other formats before calling:
-
-        # From GeoJSON dict
-        from shapely.geometry import shape
-        poly = shape(geojson_dict)
-
-        # From WKT
-        from shapely import wkt
-        poly = wkt.loads(wkt_string)
-
-        # From GeoDataFrame (single feature)
-        poly = gdf.geometry.iloc[0]
+    Accepts anything `to_polygon` accepts: a shapely Polygon or MultiPolygon, a WKT string,
+    or a GeoJSON dict or string. A MultiPolygon is covered by the bbox of all its parts.
 
     Args:
-        geometry: A shapely.Polygon. MultiPolygon is not supported — split via
-            .geoms and call this function once per part.
+        geometry: a shapely (Multi)Polygon, a WKT string, or a GeoJSON dict or string.
         scale: Pixel size in units of target_crs (meters for UTM, degrees for 4326).
         crs: CRS of the input geometry. Default 'EPSG:4326'.
         target_crs: CRS of the output. None → auto-UTM by polygon centroid.
@@ -234,25 +224,14 @@ def polygon_to_rt(
         RasterTransform in target_crs covering the polygon's bbox.
 
     Raises:
-        TypeError: if geometry is not a shapely.Polygon.
+        TypeError: if the input is not a polygon or cannot be parsed as one.
         ValueError: if scale <= 0, the polygon is topologically invalid, or
             coordinates are inconsistent with the declared CRS.
     """
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
 
-    if isinstance(geometry, shapely.MultiPolygon):
-        raise TypeError(
-            "MultiPolygon not supported. Iterate .geoms and call polygon_to_rt per part:\n"
-            "  for sub in multipoly.geoms:\n"
-            "      rt = polygon_to_rt(sub, scale=..., crs=...)"
-        )
-    if not isinstance(geometry, shapely.Polygon):
-        raise TypeError(
-            f"geometry must be shapely.Polygon, got {type(geometry).__name__}. "
-            f"Convert your input to a Polygon first "
-            f"(e.g. shape(geojson_dict), wkt.loads(wkt_string), gdf.geometry.iloc[0])."
-        )
+    geometry = to_polygon(geometry)
 
     if not geometry.is_valid:
         from shapely.validation import explain_validity
