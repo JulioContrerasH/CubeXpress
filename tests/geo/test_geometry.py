@@ -12,9 +12,10 @@ def _patch_rectangle(monkeypatch):
 
     captured = {}
 
-    def fake_rectangle(coords, proj=None, evenOdd=None):
+    def fake_rectangle(coords, proj=None, geodesic=None, evenOdd=None):
         captured["coords"] = coords
         captured["proj"] = proj
+        captured["geodesic"] = geodesic
         captured["evenOdd"] = evenOdd
         return {"fake_geometry": True, "coords": coords, "proj": proj}
 
@@ -38,11 +39,16 @@ def test_rt_to_geometry_uses_rt_crs(monkeypatch):
     assert captured["proj"] == "EPSG:32718"
 
 
-def test_rt_to_geometry_uses_even_odd_false(monkeypatch):
-    """evenOdd=False is required for unambiguous projected polygons."""
+def test_rt_to_geometry_uses_planar_edges(monkeypatch):
+    """Planar edges (geodesic=False + evenOdd=True) are what make the geometry exact.
+
+    In a projected CRS only this pair of flags is accepted for a planar rectangle:
+    geodesic=True + evenOdd=True raises, geodesic=False + evenOdd=False raises.
+    """
     captured = _patch_rectangle(monkeypatch)
     rt_to_geometry(_rt())
-    assert captured["evenOdd"] is False
+    assert captured["geodesic"] is False
+    assert captured["evenOdd"] is True
 
 
 def test_rt_to_geometry_coords_match_bbox(monkeypatch):
@@ -83,7 +89,8 @@ def test_point_to_geometry_returns_rectangle(monkeypatch):
     captured = _patch_rectangle(monkeypatch)
     point_to_geometry(lon=6.659, lat=0.249, width=512, height=512, scale=10)
     assert "coords" in captured
-    assert captured["evenOdd"] is False
+    assert captured["geodesic"] is False
+    assert captured["evenOdd"] is True
 
 
 def test_point_to_geometry_matches_point_to_rt(monkeypatch):
@@ -145,3 +152,36 @@ def test_point_to_geometry_real_filterbounds(require_ee):
            .filterBounds(geom)
            .filterDate("2023-01-01", "2023-06-01"))
     assert col.size().getInfo() > 0
+
+@pytest.mark.integration
+def test_rt_to_geometry_is_exact_for_a_big_rt(require_ee):
+    """Planar edges make the search region the rt's own rectangle.
+
+    A 2000 x 500 km rt in UTM: the exact rectangular area is 984411.5 km². With the geodesic
+    default Earth Engine reports 984842.6 (431 km² more), which this test catches.
+    """
+    rt = _rt(crs="EPSG:32718", tx=200_000.0, ty=8_500_000.0, sx=500, sy=-500,
+             w=4000, h=1000)
+    geom = rt_to_geometry(rt)
+    area_km2 = geom.area(maxError=1).getInfo() / 1e6
+    assert abs(area_km2 - 984_411.5) < 10
+
+
+@pytest.mark.integration
+def test_rt_to_geometry_keeps_the_antimeridian_chip_whole(require_ee):
+    """A chip crossing the antimeridian keeps its full area (16 km², not half)."""
+    from cubexpress.geo.construct import point_to_rt
+
+    rt = point_to_rt(lon=179.9995, lat=-16.5, width=400, height=400, scale=10)
+    geom = rt_to_geometry(rt)
+    area_km2 = geom.area(maxError=1).getInfo() / 1e6
+    assert 15.5 < area_km2 < 16.5
+
+
+@pytest.mark.integration
+def test_rt_to_geometry_accepts_a_polar_rt(require_ee):
+    """A polar stereographic rt builds a sane geometry, in its own CRS."""
+    rt = _rt(crs="EPSG:3413", tx=0.0, ty=-200_000.0, sx=100, sy=-100, w=200, h=200)
+    geom = rt_to_geometry(rt)
+    area_km2 = geom.area(maxError=1).getInfo() / 1e6
+    assert 350 < area_km2 < 450

@@ -4,13 +4,22 @@ A RasterTransform describes the pixel grid you will DOWNLOAD. To DISCOVER which
 images exist there, Earth Engine needs a search region (an ee.Geometry) to pass
 to filterBounds. This module bridges the two.
 
-Robustness note: the geometry is built in the RasterTransform's own CRS
-(typically UTM) and is NOT reprojected to EPSG:4326. Reprojecting a rectangle to
-4326 is safe at mid-latitudes but degenerates near the poles and the
-antimeridian (self-intersecting, wrap-around polygons that break filterBounds
-silently). Earth Engine reprojects internally per operation, so leaving the
-geometry in UTM is both correct and safe at any latitude. evenOdd=False avoids
-ambiguous polygon-fill interpretation in projected CRS.
+Robustness notes, measured against Earth Engine (2026-09-21):
+
+- The geometry is built in the RasterTransform's own CRS (typically UTM) and is NOT reprojected
+  to EPSG:4326. Reprojecting a rectangle to 4326 degenerates near the antimeridian: a chip of
+  4 km at 500 m from the line ends up with corners at 179.9811 and -179.9815, and Earth Engine
+  accepts it silently with half the area (8.7 km² instead of 16). Earth Engine reprojects
+  internally per operation, so leaving the geometry in rt.crs is correct and safe at any latitude.
+- `geodesic=False` makes the search region IDENTICAL to the downloaded grid. By default Earth
+  Engine joins the vertices with geodesics, and that default is off the rt's own edge by 1.1 m
+  at 200 km (7 m at 500 km) in UTM, and more for a 4326 rt (1 km at 500 km). With planar edges
+  Earth Engine measures exactly the rt's rectangle (984412.0 km² against 984411.5 for the exact
+  one, on a 2000 x 500 km case).
+- `evenOdd=True` goes with `geodesic=False`: in a projected CRS only two of the four flag
+  combinations are accepted. `geodesic=False, evenOdd=False` raises "Planar interiors must be
+  even/odd", and `geodesic=True, evenOdd=True` raises "Even/odd interiors currently only
+  supported in geographic coordinates".
 """
 
 from __future__ import annotations
@@ -19,12 +28,12 @@ from cubexpress.geo.construct import point_to_rt
 from cubexpress.geo.transform import RasterTransform
 
 
-def rt_to_geometry(rt: RasterTransform):
-    """Build an ee.Geometry rectangle covering a RasterTransform's extent.
+def rt_to_geometry(rt: RasterTransform) -> "ee.Geometry":
+    """Build an ee.Geometry rectangle covering a RasterTransform's extent, exactly.
 
-    The rectangle is created in the RasterTransform's native CRS and is NOT
-    reprojected, so it stays valid near poles and the antimeridian. It covers
-    exactly the area the RasterTransform would download.
+    The rectangle is created in the RasterTransform's own CRS, with planar edges, so the
+    search region and the grid that gets downloaded are the same rectangle. It is NOT
+    reprojected, which keeps it valid near the poles and the antimeridian.
 
     Earth Engine must be initialized before calling this.
 
@@ -32,7 +41,7 @@ def rt_to_geometry(rt: RasterTransform):
         rt: The RasterTransform whose extent to cover.
 
     Returns:
-        An ee.Geometry.Rectangle in rt.crs.
+        An ee.Geometry.Rectangle in rt.crs, covering exactly rt's bbox.
     """
     import ee
 
@@ -40,7 +49,8 @@ def rt_to_geometry(rt: RasterTransform):
     return ee.Geometry.Rectangle(
         [xmin, ymin, xmax, ymax],
         proj=rt.crs,
-        evenOdd=False,
+        geodesic=False,
+        evenOdd=True,
     )
 
 
@@ -50,7 +60,7 @@ def point_to_geometry(
     width: int,
     height: int,
     scale: float,
-):
+) -> "ee.Geometry":
     """Build an ee.Geometry rectangle around a point, sized in pixels.
 
     Convenience for the common case: take a lon/lat center and a patch size,
