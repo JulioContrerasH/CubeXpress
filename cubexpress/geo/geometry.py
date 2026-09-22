@@ -24,11 +24,16 @@ Robustness notes, measured against Earth Engine (2026-09-21):
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from cubexpress.geo.construct import point_to_rt
 from cubexpress.geo.transform import RasterTransform
 
+if TYPE_CHECKING:
+    import ee
 
-def rt_to_geometry(rt: RasterTransform) -> "ee.Geometry":
+
+def rt_to_geometry(rt: RasterTransform) -> ee.Geometry:
     """Build an ee.Geometry rectangle covering a RasterTransform's extent, exactly.
 
     The rectangle is created in the RasterTransform's own CRS, with planar edges, so the
@@ -60,7 +65,7 @@ def point_to_geometry(
     width: int,
     height: int,
     scale: float,
-) -> "ee.Geometry":
+) -> ee.Geometry:
     """Build an ee.Geometry rectangle around a point, sized in pixels.
 
     Convenience for the common case: take a lon/lat center and a patch size,

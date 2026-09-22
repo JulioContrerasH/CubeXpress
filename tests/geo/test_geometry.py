@@ -3,7 +3,6 @@ import pytest
 from cubexpress.geo.geometry import point_to_geometry, rt_to_geometry
 from cubexpress.geo.transform import RasterTransform
 
-
 # --- helper: capture what gets passed to ee.Geometry.Rectangle ---
 
 def _patch_rectangle(monkeypatch):
@@ -126,7 +125,7 @@ def test_rt_to_geometry_real_area(require_ee):
     rt = _rt(crs="EPSG:32632", tx=236874.0, ty=42855.0, sx=10, sy=-10, w=1500, h=1500)
     geom = rt_to_geometry(rt)
     area_km2 = geom.area(maxError=1).getInfo() / 1e6
-    # 15km × 15km = 225 km² (small distortion tolerated)
+    # 15km x 15km = 225 km² (small distortion tolerated)
     assert 220 < area_km2 < 230
 
 
