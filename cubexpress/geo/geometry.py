@@ -38,7 +38,9 @@ def rt_to_geometry(rt: RasterTransform) -> ee.Geometry:
 
     The rectangle is created in the RasterTransform's own CRS, with planar edges, so the
     search region and the grid that gets downloaded are the same rectangle. It is NOT
-    reprojected, which keeps it valid near the poles and the antimeridian.
+    reprojected, which keeps it valid near the poles and the antimeridian. A sheared grid
+    (shear_x or shear_y) is covered by its four corners instead, because its bbox would be
+    an approximation.
 
     Earth Engine must be initialized before calling this.
 
@@ -49,6 +51,23 @@ def rt_to_geometry(rt: RasterTransform) -> ee.Geometry:
         An ee.Geometry.Rectangle in rt.crs, covering exactly rt's bbox.
     """
     import ee
+
+    if rt.shear_x or rt.shear_y:
+        # A sheared grid is a parallelogram: bbox() approximates it (it assumes shear = 0),
+        # the four corners cover it exactly.
+        esquinas = [
+            [rt.translate_x, rt.translate_y],
+            [rt.translate_x + rt.width * rt.scale_x, rt.translate_y + rt.width * rt.shear_y],
+            [rt.translate_x + rt.width * rt.scale_x + rt.height * rt.shear_x,
+             rt.translate_y + rt.width * rt.shear_y + rt.height * rt.scale_y],
+            [rt.translate_x + rt.height * rt.shear_x, rt.translate_y + rt.height * rt.scale_y],
+        ]
+        return ee.Geometry.Polygon(
+            [[*esquinas, esquinas[0]]],
+            proj=rt.crs,
+            geodesic=False,
+            evenOdd=True,
+        )
 
     xmin, ymin, xmax, ymax = rt.bbox()
     return ee.Geometry.Rectangle(

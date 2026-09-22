@@ -859,3 +859,33 @@ def test_to_polygon_message_shows_the_geopandas_line():
     from cubexpress.geo.construct import to_polygon
     with pytest.raises(TypeError, match=r"gdf\.geometry\.iloc\[0\]"):
         to_polygon(None)
+
+
+# --- el antimeridiano y los flotantes (barrido de casos límite, 2026-09-21) ---
+
+def test_polygon_crossing_the_antimeridian_is_stopped():
+    """A polygon from 179.9 to -179.9 built a silently broken rt (centroid in lon 0)."""
+    cruzado = {"type": "Polygon", "coordinates": [[
+        [179.9, -16.6], [-179.9, -16.6], [-179.9, -16.5], [179.9, -16.5], [179.9, -16.6]]]}
+    with pytest.raises(ValueError, match="antimeridian"):
+        polygon_to_rt(cruzado, scale=30)
+
+
+def test_polygon_written_past_180_is_stopped():
+    """A crossing polygon written as continuous longitude (180.02) used to blame the CRS."""
+    cruzado = {"type": "Polygon", "coordinates": [[
+        [179.98, -16.6], [180.02, -16.6], [180.02, -16.5], [179.98, -16.5], [179.98, -16.6]]]}
+    with pytest.raises(ValueError, match="crossing"):
+        polygon_to_rt(cruzado, scale=30)
+
+
+def test_inverted_bbox_mentions_the_antimeridian():
+    with pytest.raises(ValueError, match="antimeridian"):
+        bbox_to_rt(179.98, -16.51, -179.98, -16.49, crs="EPSG:4326", scale=30)
+
+
+def test_degrees_do_not_add_an_extra_row_or_column():
+    """0.1° at 0.01° is 10 x 10, not 10 x 11: floating point used to ceil the wrong way."""
+    rt = bbox_to_rt(10.0, 45.0, 10.1, 45.1, crs="EPSG:4326", scale=0.01, scale_unit="deg")
+    assert (rt.width, rt.height) == (10, 10)
+

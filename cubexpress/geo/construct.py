@@ -171,14 +171,19 @@ def bbox_to_rt(
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
     if xmin >= xmax:
-        raise ValueError(f"xmin must be < xmax, got xmin={xmin}, xmax={xmax}")
+        raise ValueError(
+            f"xmin must be < xmax, got xmin={xmin}, xmax={xmax}. A polygon that crosses the "
+            f"antimeridian looks like this: split it at 180°, or pass the projected CRS of the "
+            f"area"
+        )
     if ymin >= ymax:
         raise ValueError(f"ymin must be < ymax, got ymin={ymin}, ymax={ymax}")
 
     scale_x, scale_y = _pixel_size(crs, scale, (ymin + ymax) / 2, scale_unit)
 
-    width = math.ceil((xmax - xmin) / scale_x)
-    height = math.ceil((ymax - ymin) / abs(scale_y))
+    # round(…, 9) keeps 0.1 / 0.01 = 10.000000000000002 from adding a whole extra column
+    width = math.ceil(round((xmax - xmin) / scale_x, 9))
+    height = math.ceil(round((ymax - ymin) / abs(scale_y), 9))
 
     return RasterTransform(
         crs=crs,
@@ -311,10 +316,26 @@ def polygon_to_rt(
 
         raise ValueError(f"Invalid polygon: {explain_validity(geometry)}")
 
-    # Sanity check: coords vs declared CRS
+    # Sanity check: coords vs declared CRS, and the antimeridian crossing (measured: it builds a
+    # silently broken rt, with the centroid in lon 0 and the geometry degenerating in Earth Engine)
+    from cubexpress.geo.transform import _parsed_crs
+
     xmin, ymin, xmax, ymax = geometry.bounds
-    if crs == "EPSG:4326":
-        if not (-180 <= xmin <= 180 and -90 <= ymin <= 90 and -180 <= xmax <= 180 and -90 <= ymax <= 90):
+    if _parsed_crs(crs).is_geographic:
+        if (xmax - xmin) > 180 and xmin >= -180 and xmax <= 180:
+            raise ValueError(
+                f"The polygon spans {xmax - xmin:.1f}° of longitude, so it crosses the "
+                f"antimeridian. Split it at 180°, or pass the projected CRS of the area "
+                f"(e.g. crs='EPSG:32760' for Fiji)"
+            )
+        if crs == "EPSG:4326" and not (xmin >= -180 and xmax <= 180
+                                       and ymin >= -90 and ymax <= 90):
+            if (xmax - xmin) <= 180 and (xmax > 180 or xmin < -180):
+                raise ValueError(
+                    f"The polygon goes past ±180 in longitude ({xmin} to {xmax}): that is a "
+                    f"crossing polygon written as continuous longitude. Split it at 180°, or "
+                    f"pass the projected CRS of the area"
+                )
             raise ValueError(
                 f"Declared crs='EPSG:4326' but bounds={geometry.bounds} look projected. "
                 f"Did you forget to pass crs=? (e.g. crs='EPSG:32718')"
@@ -322,7 +343,7 @@ def polygon_to_rt(
 
     # Decide target_crs: the input CRS when it is already projected, auto-UTM when geographic
     if target_crs is None:
-        from cubexpress.geo.transform import _gee_crs, _parsed_crs
+        from cubexpress.geo.transform import _gee_crs
 
         parsed = _parsed_crs(crs)
         if parsed.is_geographic:

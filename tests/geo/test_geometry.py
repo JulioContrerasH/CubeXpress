@@ -6,12 +6,21 @@ from cubexpress.geo.transform import RasterTransform
 # --- helper: capture what gets passed to ee.Geometry.Rectangle ---
 
 def _patch_rectangle(monkeypatch):
-    """Patch ee.Geometry.Rectangle to record its call args instead of hitting GEE."""
+    """Patch ee.Geometry.Rectangle and .Polygon to record their args instead of hitting GEE."""
     import ee
 
     captured = {}
 
     def fake_rectangle(coords, proj=None, geodesic=None, evenOdd=None):
+        captured["forma"] = "Rectangle"
+        captured["coords"] = coords
+        captured["proj"] = proj
+        captured["geodesic"] = geodesic
+        captured["evenOdd"] = evenOdd
+        return {"fake_geometry": True, "coords": coords, "proj": proj}
+
+    def fake_polygon(coords, proj=None, geodesic=None, evenOdd=None):
+        captured["forma"] = "Polygon"
         captured["coords"] = coords
         captured["proj"] = proj
         captured["geodesic"] = geodesic
@@ -19,6 +28,7 @@ def _patch_rectangle(monkeypatch):
         return {"fake_geometry": True, "coords": coords, "proj": proj}
 
     monkeypatch.setattr(ee.Geometry, "Rectangle", fake_rectangle)
+    monkeypatch.setattr(ee.Geometry, "Polygon", fake_polygon)
     return captured
 
 
@@ -184,3 +194,36 @@ def test_rt_to_geometry_accepts_a_polar_rt(require_ee):
     geom = rt_to_geometry(rt)
     area_km2 = geom.area(maxError=1).getInfo() / 1e6
     assert 350 < area_km2 < 450
+
+
+def test_rt_to_geometry_uses_a_polygon_when_sheared(monkeypatch):
+    """A sheared grid cannot be covered by a rectangle: its four corners are used instead."""
+    captured = _patch_rectangle(monkeypatch)
+    rt = RasterTransform(
+        crs="EPSG:32718", translate_x=450_000.0, translate_y=8_600_000.0,
+        scale_x=10, scale_y=-10, width=100, height=100, shear_x=5.0,
+    )
+    rt_to_geometry(rt)
+    assert captured["forma"] == "Polygon"
+    anillo = captured["coords"][0]
+    assert anillo[0] == [450_000.0, 8_600_000.0]
+    assert anillo[1] == [451_000.0, 8_600_000.0]      # +100 columnas en x
+    assert anillo[2] == [451_500.0, 8_599_000.0]      # +100 filas: 500 m de shear
+    assert anillo[3] == [450_500.0, 8_599_000.0]
+    assert anillo[-1] == anillo[0]                    # el anillo se cierra
+
+
+@pytest.mark.integration
+def test_rt_to_geometry_sheared_is_exact(require_ee):
+    """The sheared region follows the parallelogram, not its bbox."""
+    import ee
+
+    rt = RasterTransform(
+        crs="EPSG:32718", translate_x=450_000.0, translate_y=8_600_000.0,
+        scale_x=10, scale_y=-10, width=100, height=100, shear_x=5.0,
+    )
+    geom = rt_to_geometry(rt)
+    dentro = ee.Geometry.Point([450_750.0, 8_599_500.0], proj="EPSG:32718")
+    solo_bbox = ee.Geometry.Point([450_050.0, 8_599_050.0], proj="EPSG:32718")
+    assert geom.contains(dentro).getInfo() is True
+    assert geom.contains(solo_bbox).getInfo() is False
