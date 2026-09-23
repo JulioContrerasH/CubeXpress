@@ -317,11 +317,16 @@ def polygon_to_rt(
         raise ValueError(f"Invalid polygon: {explain_validity(geometry)}")
 
     # Sanity check: coords vs declared CRS, and the antimeridian crossing (measured: it builds a
-    # silently broken rt, with the centroid in lon 0 and the geometry degenerating in Earth Engine)
+    # silently broken rt, with the centroid in lon 0 and the geometry degenerating in Earth Engine).
+    # With an explicitly projected target the polygon is reprojected vertex by vertex, and a
+    # crossing works fine (measured: 179.9 -> -179.9 with EPSG:32760 gives a clean bbox), so the
+    # checks below are skipped.
     from cubexpress.geo.transform import _parsed_crs
 
+    target_proyectado = target_crs is not None and not _parsed_crs(target_crs).is_geographic
+
     xmin, ymin, xmax, ymax = geometry.bounds
-    if _parsed_crs(crs).is_geographic:
+    if _parsed_crs(crs).is_geographic and not target_proyectado:
         if (xmax - xmin) > 180 and xmin >= -180 and xmax <= 180:
             raise ValueError(
                 f"The polygon spans {xmax - xmin:.1f}° of longitude, so it crosses the "
@@ -366,6 +371,13 @@ def polygon_to_rt(
         transformer = Transformer.from_crs(crs, target_crs, always_xy=True)
         poly_proj = shp_transform(transformer.transform, geometry)
         bxmin, bymin, bxmax, bymax = poly_proj.bounds
+
+    if _parsed_crs(target_crs).is_geographic and (bxmax - bxmin) > 180:
+        raise ValueError(
+            f"The polygon, once in {target_crs}, spans {bxmax - bxmin:.1f}° of longitude: it "
+            f"crosses the antimeridian. Use a projected CRS for the output, or split the polygon "
+            f"at 180°"
+        )
 
     return bbox_to_rt(bxmin, bymin, bxmax, bymax, crs=target_crs, scale=scale, scale_unit=scale_unit)
 

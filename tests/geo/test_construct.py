@@ -889,3 +889,15 @@ def test_degrees_do_not_add_an_extra_row_or_column():
     rt = bbox_to_rt(10.0, 45.0, 10.1, 45.1, crs="EPSG:4326", scale=0.01, scale_unit="deg")
     assert (rt.width, rt.height) == (10, 10)
 
+
+
+def test_crossing_polygon_works_with_an_explicit_projected_target():
+    """179.9 -> -179.9 with target_crs='EPSG:32760' is fine: the ring reprojects vertex by vertex."""
+    cruzado = {"type": "Polygon", "coordinates": [[
+        [179.9, -16.6], [-179.9, -16.6], [-179.9, -16.5], [179.9, -16.5], [179.9, -16.6]]]}
+    rt = polygon_to_rt(cruzado, scale=30, target_crs="EPSG:32760")
+    assert rt.crs == "EPSG:32760"
+    xmin, ymin, xmax, ymax = rt.bbox()
+    assert abs(xmin - 809_444) < 500
+    assert abs(xmax - 830_984) < 500
+    assert (rt.width, rt.height) == (718, 380)
