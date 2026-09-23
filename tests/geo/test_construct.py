@@ -897,7 +897,7 @@ def test_crossing_polygon_works_with_an_explicit_projected_target():
         [179.9, -16.6], [-179.9, -16.6], [-179.9, -16.5], [179.9, -16.5], [179.9, -16.6]]]}
     rt = polygon_to_rt(cruzado, scale=30, target_crs="EPSG:32760")
     assert rt.crs == "EPSG:32760"
-    xmin, ymin, xmax, ymax = rt.bbox()
+    xmin, _, xmax, _ = rt.bbox()
     assert abs(xmin - 809_444) < 500
     assert abs(xmax - 830_984) < 500
     assert (rt.width, rt.height) == (718, 380)
