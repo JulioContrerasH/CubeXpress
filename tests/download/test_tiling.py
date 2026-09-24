@@ -362,3 +362,79 @@ def test_split_manifest_from_error_handles_the_dimension_error():
 def test_predict_fits_rejects_a_too_wide_manifest():
     manifest = _make_manifest(width=40_000, height=100)
     assert predict_fits(manifest, bytes_per_pixel=4.0) is False
+
+
+# --- el limite de memoria de Earth Engine: no hay numeros, se parte a la mitad ---
+
+def _mem_rt():
+    return RasterTransform(crs="EPSG:32718", translate_x=500_000, translate_y=8_500_000,
+                           scale_x=10, scale_y=-10, width=4096, height=4096)
+
+
+def test_learn_max_pixels_halves_on_a_memory_error():
+    """'User memory limit exceeded' has no numbers to parse: halve the tile."""
+    rt = _mem_rt()
+    presupuesto = learn_max_pixels_from_error("EEException: User memory limit exceeded.", rt)
+    assert presupuesto == rt.n_pixels() // 2
+
+
+def test_download_with_retry_halves_until_it_fits(monkeypatch):
+    """A memory rejection does not stop the download: halve, retry, merge."""
+    import pathlib
+
+    import cubexpress.download.tiling as tiling
+
+    intentos = []
+
+    def falso_download(manifest, out_path=None):
+        dims = manifest["grid"]["dimensions"]
+        intentos.append((dims["width"], dims["height"]))
+        if dims["width"] * dims["height"] > 4_000_000:
+            raise Exception("User memory limit exceeded.")
+        pathlib.Path(out_path).write_bytes(b"tif")
+
+    fusiones = []
+
+    def falso_merge(paths, out_path):
+        fusiones.append(len(paths))
+        pathlib.Path(out_path).write_bytes(b"merged")
+
+    monkeypatch.setattr("cubexpress.download.manifest.download_manifest", falso_download)
+    monkeypatch.setattr("cubexpress.download.merge.merge_tiles", falso_merge)
+
+    destino = pathlib.Path("/tmp/opencode/retry_out.tif")
+    tiling.download_with_retry(_make_manifest(4096, 4096), destino, nworkers=2)
+    assert destino.exists()
+    assert len(intentos) > 1
+    assert fusiones
+
+
+def test_download_with_retry_reraises_a_non_size_error(monkeypatch):
+    import pathlib
+
+    import pytest
+
+    import cubexpress.download.tiling as tiling
+
+    def falla(manifest, out_path=None):
+        raise ValueError("boom")
+
+    monkeypatch.setattr("cubexpress.download.manifest.download_manifest", falla)
+    with pytest.raises(ValueError, match="boom"):
+        tiling.download_with_retry(_make_manifest(64, 64), pathlib.Path("/tmp/opencode/x.tif"))
+
+
+def test_download_with_retry_gives_up_after_max_depth(monkeypatch):
+    import pathlib
+
+    import pytest
+
+    import cubexpress.download.tiling as tiling
+
+    def siempre_memoria(manifest, out_path=None):
+        raise Exception("User memory limit exceeded.")
+
+    monkeypatch.setattr("cubexpress.download.manifest.download_manifest", siempre_memoria)
+    with pytest.raises(Exception, match="memory"):
+        tiling.download_with_retry(_make_manifest(4096, 4096), pathlib.Path("/tmp/opencode/y.tif"),
+                                   max_depth=1)

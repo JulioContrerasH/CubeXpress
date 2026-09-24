@@ -26,6 +26,7 @@ from cubexpress.download.pool import Job, TileTask, run_pool
 from cubexpress.download.runner import ExpressResult
 from cubexpress.download.tiling import (
     _manifest_with_rt,
+    download_with_retry,
     is_size_error,
     learn_max_pixels_from_error,
 )
@@ -256,8 +257,8 @@ def _run_whole(table, polygon, outfolder, nworkers, file_format, overwrite, verb
 
 
 def _download_tile(manifest: dict, tile_path: pathlib.Path) -> None:
-    """Download one tile to disk (pool download_fn)."""
-    download_manifest(manifest, out_path=tile_path)
+    """Download one tile to disk (pool download_fn), splitting it if EE says it is too heavy."""
+    download_with_retry(manifest, tile_path)
 
 
 def _learn_max_pixels(manifest: dict, rt: RasterTransform) -> int | None:

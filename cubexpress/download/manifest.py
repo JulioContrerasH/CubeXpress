@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import pathlib
+import threading
 from typing import Any
 
 from cubexpress.download.gee_crs import gee_crs_code
+
+# One lock per output path: on Windows two threads writing the same tile at once raises
+# "[WinError 32] The process cannot access the file because it is being used by another
+# process". The paths are unique per tile in theory, but retries can revisit one.
+_WRITE_LOCKS: dict[str, threading.Lock] = {}
+_WRITE_LOCKS_GUARD = threading.Lock()
+
+
+def _write_lock(path: pathlib.Path) -> threading.Lock:
+    key = str(path.resolve())
+    with _WRITE_LOCKS_GUARD:
+        return _WRITE_LOCKS.setdefault(key, threading.Lock())
 
 
 def _with_gee_crs(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -82,5 +95,6 @@ def download_manifest(
 
     out_path = pathlib.Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(result)
+    with _write_lock(out_path):
+        out_path.write_bytes(result)
     return None

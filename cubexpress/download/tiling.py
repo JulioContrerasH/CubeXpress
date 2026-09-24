@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from typing import Any
 
@@ -74,11 +77,57 @@ def learn_max_pixels_from_error(
         caps.append(int((dims[2] * safety_factor) ** 2))
     else:
         caps.append(int((EE_MAX_DIMENSION * safety_factor) ** 2))
-    actual_bytes, limit_bytes = parse_size_error(error_message)
-    cost = actual_bytes / (rt.width * rt.height)
-    if cost > 0:
-        caps.append(int((limit_bytes / cost) * safety_factor))
+
+    by_bytes = re.findall(r"(\d+)\s*bytes", error_message.lower())
+    if len(by_bytes) >= 2:
+        actual, limit = int(by_bytes[0]), int(by_bytes[1])
+        cost = actual / (rt.width * rt.height)
+        if cost > 0:
+            caps.append(int((limit / cost) * safety_factor))
+    elif dims is None:
+        # Neither bytes nor pixel-grid numbers to learn from: an Earth Engine memory
+        # rejection ("User memory limit exceeded"). There is no number to parse, so
+        # halve the tile and let the retry find out.
+        caps.append(max(1, rt.n_pixels() // 2))
     return min(caps)
+
+
+def download_with_retry(
+    manifest: dict[str, Any],
+    out_path: pathlib.Path,
+    nworkers: int = 4,
+    max_depth: int = 4,
+) -> None:
+    """Download one tile, splitting it further whenever Earth Engine says it is too heavy.
+
+    Covers the three Earth Engine limits: the pixel grid (32768 per side), the request
+    size (bytes) and the interactive memory limit ("User memory limit exceeded", which
+    carries no numbers: the tile is halved). Sub-tiles are downloaded in parallel and
+    merged into out_path, recursively, up to max_depth (4 levels: 16 pieces at most).
+    """
+    from cubexpress.download.manifest import download_manifest
+
+    try:
+        download_manifest(manifest, out_path=out_path)
+        return
+    except Exception as exc:
+        if not is_size_error(exc) or max_depth <= 0:
+            raise
+        sub_manifests = split_manifest_from_error(manifest, str(exc))
+        if len(sub_manifests) <= 1:
+            raise
+
+    from cubexpress.download.merge import merge_tiles
+
+    with tempfile.TemporaryDirectory(prefix="cubexpress_retry_") as tmp:
+        tmp_dir = pathlib.Path(tmp)
+        paths = [tmp_dir / f"tile_{i:04d}.tif" for i in range(len(sub_manifests))]
+        with ThreadPoolExecutor(max_workers=nworkers) as pool:
+            futures = [pool.submit(download_with_retry, m, p, nworkers, max_depth - 1)
+                       for m, p in zip(sub_manifests, paths, strict=True)]
+            for future in futures:
+                future.result()
+        merge_tiles(paths, out_path)
 
 
 def bytes_per_pixel_from_error(manifest: dict[str, Any], error_message: str) -> float:

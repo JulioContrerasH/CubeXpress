@@ -2,6 +2,22 @@ import pathlib
 
 import pytest
 
+
+def _patch_download(monkeypatch, fake):
+    """Patch the download in both places: the runner binding and the canonical module.
+
+    The runner calls download_manifest directly for the whole-fit paths, and the retry
+    helper imports it lazily from its own module.
+    """
+    monkeypatch.setattr("cubexpress.download.manifest.download_manifest", fake)
+    monkeypatch.setattr("cubexpress.download.runner.download_manifest", fake)
+
+
+def _patch_merge(monkeypatch, fake):
+    monkeypatch.setattr("cubexpress.download.merge.merge_tiles", fake)
+    monkeypatch.setattr("cubexpress.download.runner.merge_tiles", fake)
+
+
 from cubexpress.download.runner import ExpressResult, express, express_one
 from cubexpress.geo.construct import point_to_rt
 from cubexpress.request.row import RequestRow
@@ -36,7 +52,7 @@ def _patch_download_with(monkeypatch, payload):
             pathlib.Path(out_path).write_bytes(payload)
         return payload
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
+    _patch_download(monkeypatch, fake)
 
 
 # --- express: happy path ---
@@ -82,7 +98,7 @@ def test_express_skips_existing_when_overwrite_false(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"NEW")
 
     import cubexpress.download.runner as runner_mod
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
+    _patch_download(monkeypatch, fake)
 
     result = express(_make_table(2), tmp_path, overwrite=False, verbose=False)
     assert calls["n"] == 1                                   # only chip_01 downloaded
@@ -112,7 +128,7 @@ def test_express_non_size_error_is_recorded_and_loop_continues(tmp_path, monkeyp
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(b"OK")
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
+    _patch_download(monkeypatch, fake)
     result = express(_make_table(3), tmp_path, verbose=False)
 
     assert result.n_succeeded == 2
@@ -147,8 +163,8 @@ def test_express_size_error_triggers_split_and_merge(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"MERGED")
         return pathlib.Path(out_path)
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake_download)
-    monkeypatch.setattr(runner_mod, "merge_tiles", fake_merge)
+    _patch_download(monkeypatch, fake_download)
+    _patch_merge(monkeypatch, fake_merge)
 
     result = express(_make_table(1), tmp_path, verbose=False)
 
@@ -253,7 +269,7 @@ def test_express_one_skips_existing_when_overwrite_false(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"NEW")
 
     import cubexpress.download.runner as runner_mod
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
+    _patch_download(monkeypatch, fake)
 
     path = express_one(_make_row("solo"), tmp_path, overwrite=False)
     assert calls["n"] == 0                       # never downloaded
@@ -274,7 +290,7 @@ def test_express_one_propagates_errors(tmp_path, monkeypatch):
     def fail(manifest, out_path=None):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fail)
+    _patch_download(monkeypatch, fail)
 
     with pytest.raises(RuntimeError, match="boom"):
         express_one(_make_row("solo"), tmp_path)
@@ -332,8 +348,8 @@ def test_express_homogeneous_table_probes_only_once(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"MERGED")
         return pathlib.Path(out_path)
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake_download)
-    monkeypatch.setattr(runner_mod, "merge_tiles", fake_merge)
+    _patch_download(monkeypatch, fake_download)
+    _patch_merge(monkeypatch, fake_merge)
 
     from cubexpress.geo.transform import RasterTransform
 
@@ -373,8 +389,8 @@ def test_express_predicted_rows_still_produce_files(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"MERGED")
         return pathlib.Path(out_path)
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake_download)
-    monkeypatch.setattr(runner_mod, "merge_tiles", fake_merge)
+    _patch_download(monkeypatch, fake_download)
+    _patch_merge(monkeypatch, fake_merge)
 
     from cubexpress.geo.transform import RasterTransform
 
@@ -488,8 +504,8 @@ def test_express_heterogeneous_one_probe_per_group(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"MERGED")
         return pathlib.Path(out_path)
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
-    monkeypatch.setattr(runner_mod, "merge_tiles", fake_merge)
+    _patch_download(monkeypatch, fake)
+    _patch_merge(monkeypatch, fake_merge)
 
     table = RequestTable(rows=[
         _row_sig("a0", ["B4", "B3", "B2"], 4096, 4096),
@@ -527,8 +543,8 @@ def test_express_heterogeneous_mixed_fit_and_split(tmp_path, monkeypatch):
         pathlib.Path(out_path).write_bytes(b"MERGED")
         return pathlib.Path(out_path)
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
-    monkeypatch.setattr(runner_mod, "merge_tiles", fake_merge)
+    _patch_download(monkeypatch, fake)
+    _patch_merge(monkeypatch, fake_merge)
 
     table = RequestTable(rows=[
         _row_sig("small_0", ["B4", "B3", "B2"], 256, 256),     # fits whole
@@ -557,7 +573,7 @@ def test_express_heterogeneous_one_group_fails_others_ok(tmp_path, monkeypatch):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(b"OK")
 
-    monkeypatch.setattr(runner_mod, "download_manifest", fake)
+    _patch_download(monkeypatch, fake)
 
     table = RequestTable(rows=[
         _row_sig("good_0", ["B4", "B3", "B2"], 256, 256),
@@ -598,9 +614,9 @@ def test_pool_download_fn_retiles_on_size_error(tmp_path, monkeypatch):
         with open(out_path, "wb") as f:
             f.write(b"merged")
 
-    monkeypatch.setattr(runner, "download_manifest", fake_download_manifest)
-    monkeypatch.setattr(runner, "split_manifest_from_error", fake_split)
-    monkeypatch.setattr(runner, "merge_tiles", fake_merge)
+    _patch_download(monkeypatch, fake_download_manifest)
+    monkeypatch.setattr("cubexpress.download.tiling.split_manifest_from_error", fake_split)
+    _patch_merge(monkeypatch, fake_merge)
 
     download_tile = runner._pool_download_fn("GEO_TIFF")
     out = tmp_path / "tile.tif"
@@ -619,7 +635,7 @@ def test_pool_download_fn_reraises_non_size_error(tmp_path, monkeypatch):
     def fake_download_manifest(manifest, out_path):
         raise RuntimeError("some other EE error")
 
-    monkeypatch.setattr(runner, "download_manifest", fake_download_manifest)
+    _patch_download(monkeypatch, fake_download_manifest)
 
     download_tile = runner._pool_download_fn("GEO_TIFF")
     with pytest.raises(RuntimeError, match="some other EE error"):

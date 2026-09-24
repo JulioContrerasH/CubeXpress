@@ -245,3 +245,12 @@ def test_grid_crs_is_replaced_in_the_manifest():
     salida = m._with_gee_crs(original)
     assert salida["grid"]["crsCode"].startswith("PROJCS[")
     assert original["grid"]["crsCode"] == "EPSG:27707"      # the original is not modified
+
+
+def test_write_lock_is_stable_per_path(tmp_path):
+    """One lock per output path: on Windows two writers of the same tile raise WinError 32."""
+    from cubexpress.download.manifest import _write_lock
+
+    a, b = tmp_path / "x.tif", tmp_path / "y.tif"
+    assert _write_lock(a) is _write_lock(a)
+    assert _write_lock(a) is not _write_lock(b)

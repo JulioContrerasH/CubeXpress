@@ -12,6 +12,7 @@ from cubexpress.download.manifest import download_manifest
 from cubexpress.download.merge import merge_tiles
 from cubexpress.download.pool import Job, TileTask, run_pool
 from cubexpress.download.tiling import (
+    download_with_retry,
     is_size_error,
     parse_size_error,
     predict_fits,
@@ -242,16 +243,9 @@ def _pool_download_fn(file_format: str):
     """
 
     def download_tile(manifest: dict, tile_path: pathlib.Path) -> None:
-        try:
-            download_manifest(manifest, out_path=tile_path)
-        except Exception as exc:
-            if not is_size_error(exc):
-                raise
-            # The tile is heavier than the group's probe predicted. Split it
-            # reactively from EE's reported size and merge the sub-tiles here,
-            # so the pool still sees a single finished tile_path.
-            sub_manifests = split_manifest_from_error(manifest, str(exc))
-            _download_and_merge(sub_manifests, tile_path, nworkers=4)
+        # Heavier than predicted? download_with_retry splits it (bytes, dimensions or
+        # memory) and merges the pieces, so the pool still sees one finished tile_path.
+        download_with_retry(manifest, tile_path, nworkers=4)
 
     return download_tile
 
@@ -384,7 +378,8 @@ def _download_tiles_parallel(
     """Download a list of tile manifests in parallel into tmp_dir."""
     paths = [tmp_dir / f"tile_{i:04d}.tif" for i in range(len(tile_manifests))]
     with ThreadPoolExecutor(max_workers=nworkers) as pool:
-        futures = {pool.submit(download_manifest, m, p): (m, p) for m, p in zip(tile_manifests, paths)}
+        futures = {pool.submit(download_with_retry, m, p, nworkers): (m, p)
+                   for m, p in zip(tile_manifests, paths, strict=True)}
         for future in as_completed(futures):
             future.result()  # re-raise the first failure
     return paths
