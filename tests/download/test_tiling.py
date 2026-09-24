@@ -378,7 +378,7 @@ def test_learn_max_pixels_halves_on_a_memory_error():
     assert presupuesto == rt.n_pixels() // 2
 
 
-def test_download_with_retry_halves_until_it_fits(monkeypatch):
+def test_download_with_retry_halves_until_it_fits(monkeypatch, tmp_path):
     """A memory rejection does not stop the download: halve, retry, merge."""
     import pathlib
 
@@ -402,14 +402,14 @@ def test_download_with_retry_halves_until_it_fits(monkeypatch):
     monkeypatch.setattr("cubexpress.download.manifest.download_manifest", falso_download)
     monkeypatch.setattr("cubexpress.download.merge.merge_tiles", falso_merge)
 
-    destino = pathlib.Path("/tmp/opencode/retry_out.tif")
+    destino = tmp_path / "retry_out.tif"
     tiling.download_with_retry(_make_manifest(4096, 4096), destino, nworkers=2)
     assert destino.exists()
     assert len(intentos) > 1
     assert fusiones
 
 
-def test_download_with_retry_reraises_a_non_size_error(monkeypatch):
+def test_download_with_retry_reraises_a_non_size_error(monkeypatch, tmp_path):
     import pathlib
 
     import pytest
@@ -421,10 +421,10 @@ def test_download_with_retry_reraises_a_non_size_error(monkeypatch):
 
     monkeypatch.setattr("cubexpress.download.manifest.download_manifest", falla)
     with pytest.raises(ValueError, match="boom"):
-        tiling.download_with_retry(_make_manifest(64, 64), pathlib.Path("/tmp/opencode/x.tif"))
+        tiling.download_with_retry(_make_manifest(64, 64), tmp_path / "x.tif")
 
 
-def test_download_with_retry_gives_up_after_max_depth(monkeypatch):
+def test_download_with_retry_gives_up_after_max_depth(monkeypatch, tmp_path):
     import pathlib
 
     import pytest
@@ -436,5 +436,4 @@ def test_download_with_retry_gives_up_after_max_depth(monkeypatch):
 
     monkeypatch.setattr("cubexpress.download.manifest.download_manifest", siempre_memoria)
     with pytest.raises(Exception, match="memory"):
-        tiling.download_with_retry(_make_manifest(4096, 4096), pathlib.Path("/tmp/opencode/y.tif"),
-                                   max_depth=1)
+        tiling.download_with_retry(_make_manifest(4096, 4096), tmp_path / "y.tif", max_depth=1)
