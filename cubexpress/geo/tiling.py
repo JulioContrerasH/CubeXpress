@@ -6,11 +6,16 @@ import math
 
 from cubexpress.geo.transform import RasterTransform
 
+# Earth Engine caps every getDownloadURL request at 32768 pixels per side. Straight from the
+# error: "Pixel grid dimensions (103439x55072) must be less than or equal to 32768."
+EE_MAX_DIMENSION = 32768
+
 
 def split_transform(
     rt: RasterTransform,
     max_pixels: int,
     force_grid: bool = False,
+    max_side: int | None = EE_MAX_DIMENSION,
 ) -> list[RasterTransform]:
     """Split a RasterTransform into tiles, each with at most `max_pixels` pixels.
 
@@ -34,6 +39,9 @@ def split_transform(
         max_pixels: Maximum allowed pixels per tile.
         force_grid: If True, tile as a 2D grid regardless of strip fit (for
             polygon-aware clipping, where square tiles maximize skippable area).
+        max_side: Maximum pixels per side per tile (Earth Engine's cap is
+            EE_MAX_DIMENSION = 32768). None removes the cap, for callers that
+            are not Earth Engine requests.
 
     Returns:
         A list of RasterTransforms. Always non-empty.
@@ -41,26 +49,34 @@ def split_transform(
     if max_pixels <= 0:
         raise ValueError(f"max_pixels must be > 0, got {max_pixels}")
 
-    if rt.n_pixels() <= max_pixels:
+    if max_side is not None and max_side < 1:
+        raise ValueError(f"max_side must be >= 1 or None, got {max_side}")
+
+    lado = max_side if max_side is not None else 10**9
+    fits_side = rt.width <= lado and rt.height <= lado
+    if rt.n_pixels() <= max_pixels and fits_side:
         return [rt]
 
     # Polygon clipping wants square-ish tiles so bbox corners can be skipped.
     if force_grid:
-        tile_side = max(1, int(math.sqrt(max_pixels)))
+        tile_side = min(lado, max(1, int(math.sqrt(max_pixels))))
         return _grid_tiles(rt, tile_side, tile_side)
 
-    # Try horizontal strips: full width, height reduced
-    tile_h = max_pixels // rt.width
-    if tile_h >= 1:
-        return _horizontal_strips(rt, tile_h)
+    # Try horizontal strips: full width, height reduced. Only when the full width
+    # respects the side cap (a 103439 px wide strip does not, no matter the height).
+    if rt.width <= lado:
+        tile_h = min(max_pixels // rt.width, lado)
+        if tile_h >= 1:
+            return _horizontal_strips(rt, tile_h)
 
     # Try vertical strips: full height, width reduced
-    tile_w = max_pixels // rt.height
-    if tile_w >= 1:
-        return _vertical_strips(rt, tile_w)
+    if rt.height <= lado:
+        tile_w = min(max_pixels // rt.height, lado)
+        if tile_w >= 1:
+            return _vertical_strips(rt, tile_w)
 
     # Last resort: 2D grid
-    tile_side = max(1, int(math.sqrt(max_pixels)))
+    tile_side = min(lado, max(1, int(math.sqrt(max_pixels))))
     return _grid_tiles(rt, tile_side, tile_side)
 
 

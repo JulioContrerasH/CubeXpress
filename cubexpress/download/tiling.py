@@ -6,7 +6,7 @@ import re
 from copy import deepcopy
 from typing import Any
 
-from cubexpress.geo.tiling import split_transform
+from cubexpress.geo.tiling import EE_MAX_DIMENSION, split_transform
 from cubexpress.geo.transform import RasterTransform
 
 _SIZE_ERROR_PATTERNS = (
@@ -36,6 +36,49 @@ def parse_size_error(error_message: str) -> tuple[int, int]:
         return int(matches[0]), int(matches[1])
     # Conservative fallback: assume we're at 1.5x the (hardcoded) 48 MiB limit
     return 75_497_472, 50_331_648
+
+
+_DIMENSION_RE = re.compile(
+    r"dimensions?\s*\((\d+)\s*x\s*(\d+)\)\s*must be less than or equal to (\d+)",
+    re.IGNORECASE,
+)
+
+
+def parse_dimension_error(error_message: str) -> tuple[int, int, int] | None:
+    """Extract (width, height, side_limit) from EE's pixel-grid error, or None.
+
+    Typical EE message:
+        "Pixel grid dimensions (103439x55072) must be less than or equal to 32768."
+    """
+    match = _DIMENSION_RE.search(error_message)
+    if match is None:
+        return None
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def learn_max_pixels_from_error(
+    error_message: str,
+    rt: RasterTransform,
+    safety_factor: float = 0.95,
+) -> int:
+    """The pixel budget a rejected request teaches, from whichever limit binds.
+
+    A byte-size error gives an empirical cost per pixel; a pixel-grid error gives the
+    side limit (32768). Taking the minimum keeps the next try under both caps. For a
+    pixel-grid error the byte side falls back to a conservative default, so it does
+    not bind; for a byte error the side side uses Earth Engine's own cap.
+    """
+    caps = []
+    dims = parse_dimension_error(error_message)
+    if dims is not None:
+        caps.append(int((dims[2] * safety_factor) ** 2))
+    else:
+        caps.append(int((EE_MAX_DIMENSION * safety_factor) ** 2))
+    actual_bytes, limit_bytes = parse_size_error(error_message)
+    cost = actual_bytes / (rt.width * rt.height)
+    if cost > 0:
+        caps.append(int((limit_bytes / cost) * safety_factor))
+    return min(caps)
 
 
 def bytes_per_pixel_from_error(manifest: dict[str, Any], error_message: str) -> float:
@@ -74,6 +117,8 @@ def predict_fits(
         True if the predicted payload fits under limit_bytes * safety_factor.
     """
     rt = _rt_from_manifest(manifest)
+    if rt.width > EE_MAX_DIMENSION or rt.height > EE_MAX_DIMENSION:
+        return False
     predicted = bytes_per_pixel * rt.width * rt.height
     return predicted <= limit_bytes * safety_factor
 
@@ -145,13 +190,12 @@ def split_manifest_from_error(
     if "dimensions" not in grid or "affineTransform" not in grid or "crsCode" not in grid:
         raise ValueError("manifest['grid'] is missing required keys")
 
-    actual_bytes, limit_bytes = parse_size_error(error_message)
     rt = _rt_from_manifest(manifest)
-    bytes_per_pixel = actual_bytes / (rt.width * rt.height)
-    if bytes_per_pixel <= 0:
-        raise ValueError(f"Invalid bytes_per_pixel computed: {bytes_per_pixel}")
-
-    return split_manifest_by_bpp(manifest, bytes_per_pixel, limit_bytes=limit_bytes, safety_factor=safety_factor)
+    dims = parse_dimension_error(error_message)
+    max_pixels = learn_max_pixels_from_error(error_message, rt, safety_factor)
+    max_side = dims[2] if dims is not None else EE_MAX_DIMENSION
+    sub_rts = split_transform(rt, max_pixels=max_pixels, max_side=max_side)
+    return [_manifest_with_rt(manifest, sub_rt) for sub_rt in sub_rts]
 
 
 # --- internal helpers ---

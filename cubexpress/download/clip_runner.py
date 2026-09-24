@@ -27,7 +27,7 @@ from cubexpress.download.runner import ExpressResult
 from cubexpress.download.tiling import (
     _manifest_with_rt,
     is_size_error,
-    parse_size_error,
+    learn_max_pixels_from_error,
 )
 from cubexpress.geo.clip import tiles_vs_polygon
 from cubexpress.geo.transform import RasterTransform
@@ -270,9 +270,7 @@ def _learn_max_pixels(manifest: dict, rt: RasterTransform) -> int | None:
         except Exception as exc:
             if not is_size_error(exc):
                 raise
-            actual_bytes, limit_bytes = parse_size_error(str(exc))
-            bpp = actual_bytes / (rt.width * rt.height)
-            return int((limit_bytes / bpp) * 0.95)  # 5% headroom
+            return learn_max_pixels_from_error(str(exc), rt)  # 5% headroom
 
 
 def _profile_from_tile(tile_path: pathlib.Path) -> tuple[int, str]:

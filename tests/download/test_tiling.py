@@ -1,13 +1,16 @@
 import pytest
 
 from cubexpress.download.tiling import (
-    is_size_error,
-    parse_size_error,
-    split_manifest_from_error,
-    split_manifest_by_bpp,
-    predict_fits,
     bytes_per_pixel_from_error,
+    is_size_error,
+    learn_max_pixels_from_error,
+    parse_dimension_error,
+    parse_size_error,
+    predict_fits,
+    split_manifest_by_bpp,
+    split_manifest_from_error,
 )
+from cubexpress.geo.transform import RasterTransform
 
 
 # --- helpers ---
@@ -309,3 +312,53 @@ def test_split_from_error_equals_split_by_bpp():
     for a, b in zip(via_error, via_bpp):
         assert a["grid"]["dimensions"] == b["grid"]["dimensions"]
         assert a["grid"]["affineTransform"] == b["grid"]["affineTransform"]
+
+# --- el limite de 32.768 por lado: el caso de Espana (2026-09-23) ---
+
+_TYPICAL_DIMENSION_ERROR = (
+    "tile 0 of ndvi_06_2023 failed: Pixel grid dimensions (103439x55072) "
+    "must be less than or equal to 32768."
+)
+
+
+def test_parse_dimension_error_extracts_the_numbers():
+    assert parse_dimension_error(_TYPICAL_DIMENSION_ERROR) == (103_439, 55_072, 32_768)
+    assert parse_dimension_error(_TYPICAL_EE_ERROR) is None
+
+
+def test_learn_max_pixels_uses_the_side_cap_for_a_dimension_error():
+    """The old code fell back to a nonsense bpp and learned 3.6 billion pixels."""
+    rt = RasterTransform(crs="EPSG:32718", translate_x=100_000, translate_y=4_900_000,
+                         scale_x=10, scale_y=-10, width=103_439, height=55_072)
+    presupuesto = learn_max_pixels_from_error(_TYPICAL_DIMENSION_ERROR, rt)
+    assert abs(presupuesto - (32_768 * 0.95) ** 2) < 1
+    assert presupuesto < rt.n_pixels()
+
+
+def test_learn_max_pixels_keeps_the_bytes_cap_when_it_binds():
+    """With 9 bytes per pixel the 48 MiB cap is tighter than the side cap."""
+    rt = RasterTransform(crs="EPSG:32718", translate_x=500_000, translate_y=8_500_000,
+                         scale_x=10, scale_y=-10, width=4096, height=4096)
+    actual, limit = 150_994_944, 50_331_648        # 9 bytes por pixel, tope de 48 MiB
+    mensaje = f"Total request size ({actual} bytes) must be less than or equal to {limit} bytes."
+    presupuesto = learn_max_pixels_from_error(mensaje, rt)
+    coste = actual / (rt.width * rt.height)
+    assert presupuesto == int((limit / coste) * 0.95)
+    assert presupuesto < (32_768 * 0.95) ** 2
+
+
+def test_split_manifest_from_error_handles_the_dimension_error():
+    manifest = _make_manifest(width=103_439, height=55_072)
+    subs = split_manifest_from_error(manifest, _TYPICAL_DIMENSION_ERROR)
+    assert len(subs) == 8
+    for sub in subs:
+        dims = sub["grid"]["dimensions"]
+        assert dims["width"] <= 32_768
+        assert dims["height"] <= 32_768
+    assert sum(m["grid"]["dimensions"]["width"] * m["grid"]["dimensions"]["height"]
+               for m in subs) == 103_439 * 55_072
+
+
+def test_predict_fits_rejects_a_too_wide_manifest():
+    manifest = _make_manifest(width=40_000, height=100)
+    assert predict_fits(manifest, bytes_per_pixel=4.0) is False

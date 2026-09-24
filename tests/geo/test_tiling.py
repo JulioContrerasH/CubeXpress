@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cubexpress.geo.tiling import split_transform
+from cubexpress.geo.tiling import EE_MAX_DIMENSION, split_transform
 from cubexpress.geo.transform import RasterTransform
 
 
@@ -173,3 +173,27 @@ def test_force_grid_fits_when_small():
         scale_x=10.0, scale_y=-10.0, width=50, height=50,
     )
     assert split_transform(rt, 10_000, force_grid=True) == [rt]
+
+# --- el tope de 32.768 por lado de Earth Engine ---
+
+def test_split_respects_the_ee_side_cap():
+    """A 100,000 x 50,000 rt needs a 4 x 2 grid: full-width strips would be illegal."""
+    rt = _make_rt(width=100_000, height=50_000)
+    tiles = split_transform(rt, max_pixels=2_000_000_000)
+    assert len(tiles) == 8
+    assert all(t.width <= EE_MAX_DIMENSION and t.height <= EE_MAX_DIMENSION for t in tiles)
+    assert sum(t.n_pixels() for t in tiles) == rt.n_pixels()
+
+
+def test_side_cap_beats_the_full_width_strip():
+    """A 50,000 px wide strip is illegal even when its pixel count fits the budget."""
+    rt = _make_rt(width=50_000, height=200)
+    tiles = split_transform(rt, max_pixels=10_000_000)
+    assert all(t.width <= EE_MAX_DIMENSION for t in tiles)
+
+
+def test_without_the_side_cap_the_strips_stay():
+    rt = _make_rt(width=50_000, height=200)
+    tiles = split_transform(rt, max_pixels=10_000_000, max_side=None)
+    assert len(tiles) == 1
+    assert tiles[0].width == 50_000
