@@ -1,10 +1,8 @@
-import pathlib
 
 import numpy as np
 import pytest
 
 from cubexpress.download.manifest import download_manifest
-
 
 # --- helpers ---
 
@@ -146,7 +144,7 @@ def test_download_manifest_missing_fileFormat_rejected():
 def test_download_manifest_missing_asset_and_expression_rejected():
     bad = _make_asset_manifest()
     del bad["assetId"]
-    with pytest.raises(ValueError, match="assetId.*expression"):
+    with pytest.raises(ValueError, match=r"assetId.*expression"):
         download_manifest(bad)
 
 
@@ -228,6 +226,7 @@ def test_rejected_code_goes_as_wkt1_without_asking():
 def test_unknown_code_asks_gee(monkeypatch):
     """A code in neither list (a new one) is asked to Earth Engine, and falls back to WKT1."""
     import ee
+
     import cubexpress.download.gee_crs as g
 
     class FakeProjection:
@@ -269,7 +268,7 @@ def test_is_rate_error_detects_the_concurrency_message():
     assert not is_rate_error(Exception("Total request size (150994944 bytes) must be ..."))
 
 
-def test_a_rate_error_gets_a_wait_and_a_retry(monkeypatch):
+def test_a_rate_error_gets_a_wait_and_a_retry(monkeypatch, tmp_path):
     """Two 429s and then success: the download must not fail nor split."""
     import ee
 
@@ -285,9 +284,7 @@ def test_a_rate_error_gets_a_wait_and_a_retry(monkeypatch):
         return b"tif"
 
     monkeypatch.setattr(ee.data, "getPixels", falso_get_pixels)
-    ruta = "/tmp/opencode/rate_test.tif"
-    import pathlib as _p
-    _p.Path(ruta).parent.mkdir(parents=True, exist_ok=True)
+    ruta = tmp_path / "rate_test.tif"
     manifiesto = {"fileFormat": "GEO_TIFF", "bandIds": ["B4"], "assetId": "X",
                   "grid": {"crsCode": "EPSG:32718", "dimensions": {"width": 2, "height": 2},
                            "affineTransform": {"scaleX": 10, "shearX": 0, "translateX": 0,
