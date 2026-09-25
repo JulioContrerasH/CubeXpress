@@ -102,8 +102,6 @@ def download_manifest(
         ValueError: if manifest is missing required keys.
         ee.EEException: propagated from Earth Engine (size limit, auth, etc.).
     """
-    import ee
-
     if "fileFormat" not in manifest:
         raise ValueError("manifest is missing 'fileFormat'")
     if "assetId" not in manifest and "expression" not in manifest:
