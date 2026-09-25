@@ -6,15 +6,17 @@ import os
 import pathlib
 import threading
 import time
+from contextlib import contextmanager
 from typing import Any
 
 from cubexpress.download.gee_crs import gee_crs_code
 
-# The project's concurrent interactive request limit (20 in the basic tiers, see
-# https://developers.google.com/earth-engine/guides/usage). Every RPC goes through this
-# semaphore, so the pools and their nested retries can never overshoot it together.
+# The project's concurrent interactive request limit is 20 in the basic tiers (see
+# https://developers.google.com/earth-engine/guides/usage), and it is per project: the Code
+# Editor, apps and other scripts share it. 16 leaves a margin, and CUBEXPRESS_MAX_REQUESTS
+# changes it. When Earth Engine still says we are pushing too hard, the budget shrinks by a
+# quarter and the request waits, so the run adapts instead of hammering.
 MAX_REQUESTS = int(os.environ.get("CUBEXPRESS_MAX_REQUESTS", "16"))
-_REQUEST_SLOTS = threading.BoundedSemaphore(MAX_REQUESTS)
 
 # Rate rejections are not a size problem: they get a wait and a retry, never a split.
 _RATE_PATTERNS = ("too many requests", "concurrency limit", "rate limit", "quota exceeded")
@@ -25,11 +27,47 @@ def is_rate_error(error: Exception | str) -> bool:
     return any(pattern in msg for pattern in _RATE_PATTERNS)
 
 
+class _RequestBudget:
+    """Concurrency slots for the RPCs, which shrink when Earth Engine pushes back."""
+
+    def __init__(self, cap: int) -> None:
+        self.max = cap
+        self.cap = cap
+        self._in_flight = 0
+        self._condition = threading.Condition()
+
+    @contextmanager
+    def slot(self):
+        with self._condition:
+            while self._in_flight >= self.cap:
+                self._condition.wait()
+            self._in_flight += 1
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._in_flight -= 1
+                self._condition.notify()
+
+    def shrink(self) -> None:
+        with self._condition:
+            self.cap = max(1, int(self.cap * 0.75))
+            self._condition.notify_all()
+
+    def reset(self) -> None:
+        with self._condition:
+            self.cap = self.max
+            self._condition.notify_all()
+
+
+_BUDGET = _RequestBudget(MAX_REQUESTS)
+
+
 def _set_max_requests(n: int) -> None:
     """Change the request budget (tests, or a project with a different limit)."""
-    global MAX_REQUESTS, _REQUEST_SLOTS
+    global MAX_REQUESTS, _BUDGET
     MAX_REQUESTS = n
-    _REQUEST_SLOTS = threading.BoundedSemaphore(n)
+    _BUDGET = _RequestBudget(n)
 
 # One lock per output path: on Windows two threads writing the same tile at once raises
 # "[WinError 32] The process cannot access the file because it is being used by another
@@ -114,11 +152,14 @@ def download_manifest(
     result = None
     for attempt in range(5):
         try:
-            with _REQUEST_SLOTS:
+            with _BUDGET.slot():
                 result = _call_pixels(manifest)
             break
         except Exception as exc:
-            if not is_rate_error(exc) or attempt == 4:
+            if not is_rate_error(exc):
+                raise
+            _BUDGET.shrink()          # push back: fewer requests in flight from now on
+            if attempt == 4:
                 raise
             time.sleep(2 ** (attempt + 1))
 

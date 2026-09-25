@@ -328,3 +328,28 @@ def test_the_request_budget_caps_concurrency(monkeypatch):
         h.join()
     m._set_max_requests(16)
     assert max(pico) <= 2
+
+
+def test_the_budget_shrinks_when_earth_engine_pushes_back(monkeypatch):
+    """A 429 lowers the concurrency for the rest of the run: it adapts, no hammering."""
+    import ee
+
+    import cubexpress.download.manifest as m
+
+    monkeypatch.setattr("cubexpress.download.manifest.time.sleep", lambda _s: None)
+    m._set_max_requests(16)
+
+    def siempre_429(request):
+        raise Exception(_429)
+
+    monkeypatch.setattr(ee.data, "getPixels", siempre_429)
+    manifiesto = {"fileFormat": "GEO_TIFF", "bandIds": ["B4"], "assetId": "X",
+                  "grid": {"crsCode": "EPSG:32718", "dimensions": {"width": 2, "height": 2},
+                           "affineTransform": {"scaleX": 10, "shearX": 0, "translateX": 0,
+                                               "scaleY": -10, "shearY": 0, "translateY": 0}}}
+    import pytest
+    with pytest.raises(Exception, match="concurrency"):
+        m.download_manifest(manifiesto)
+    assert m._BUDGET.max == 16        # el techo no cambia
+    assert m._BUDGET.cap < 16         # el cupo sí: se achicó solo
+    m._set_max_requests(16)
