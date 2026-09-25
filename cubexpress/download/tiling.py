@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from typing import Any
 
+from cubexpress.download.manifest import is_rate_error
 from cubexpress.geo.tiling import EE_MAX_DIMENSION, split_transform
 from cubexpress.geo.transform import RasterTransform
 
@@ -21,7 +22,13 @@ _SIZE_ERROR_PATTERNS = (
 
 
 def is_size_error(error: Exception) -> bool:
-    """Return True if the exception looks like an EE size-limit rejection."""
+    """Return True if the exception looks like an EE size-limit rejection.
+
+    Rate rejections ("concurrency limit was exceeded") also say "exceed", but they are
+    not about size: those are handled with a wait and a retry, so they do not count.
+    """
+    if is_rate_error(error):
+        return False
     msg = str(error).lower()
     return any(pattern in msg for pattern in _SIZE_ERROR_PATTERNS)
 

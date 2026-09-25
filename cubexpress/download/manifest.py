@@ -2,11 +2,34 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
 import threading
+import time
 from typing import Any
 
 from cubexpress.download.gee_crs import gee_crs_code
+
+# The project's concurrent interactive request limit (20 in the basic tiers, see
+# https://developers.google.com/earth-engine/guides/usage). Every RPC goes through this
+# semaphore, so the pools and their nested retries can never overshoot it together.
+MAX_REQUESTS = int(os.environ.get("CUBEXPRESS_MAX_REQUESTS", "16"))
+_REQUEST_SLOTS = threading.BoundedSemaphore(MAX_REQUESTS)
+
+# Rate rejections are not a size problem: they get a wait and a retry, never a split.
+_RATE_PATTERNS = ("too many requests", "concurrency limit", "rate limit", "quota exceeded")
+
+
+def is_rate_error(error: Exception | str) -> bool:
+    msg = str(error).lower()
+    return any(pattern in msg for pattern in _RATE_PATTERNS)
+
+
+def _set_max_requests(n: int) -> None:
+    """Change the request budget (tests, or a project with a different limit)."""
+    global MAX_REQUESTS, _REQUEST_SLOTS
+    MAX_REQUESTS = n
+    _REQUEST_SLOTS = threading.BoundedSemaphore(n)
 
 # One lock per output path: on Windows two threads writing the same tile at once raises
 # "[WinError 32] The process cannot access the file because it is being used by another
@@ -29,6 +52,22 @@ def _with_gee_crs(manifest: dict[str, Any]) -> dict[str, Any]:
     request = dict(manifest)
     request["grid"] = {**grid, "crsCode": gee_crs_code(grid["crsCode"])}
     return request
+
+
+def _call_pixels(manifest: dict[str, Any]):
+    """One RPC: getPixels for an asset id, computePixels for an expression."""
+    import ee
+
+    if "assetId" in manifest:
+        return ee.data.getPixels(_with_gee_crs(manifest))
+    # 'expression' can be either a serialized JSON string OR an ee.Image instance.
+    # ee.data.computePixels accepts both, but if it's a string we must deserialize.
+    request = _with_gee_crs(manifest)
+    if isinstance(request["expression"], str):
+        import json
+
+        request["expression"] = ee.deserializer.decode(json.loads(request["expression"]))
+    return ee.data.computePixels(request)
 
 
 def download_manifest(
@@ -72,18 +111,18 @@ def download_manifest(
 
     file_format = manifest["fileFormat"]
 
-    # Dispatch to the correct EE endpoint
-    if "assetId" in manifest:
-        result = ee.data.getPixels(_with_gee_crs(manifest))
-    else:
-        # 'expression' can be either a serialized JSON string OR an ee.Image instance.
-        # ee.data.computePixels accepts both, but if it's a string we must deserialize.
-        request = _with_gee_crs(manifest)
-        if isinstance(request["expression"], str):
-            import json
-
-            request["expression"] = ee.deserializer.decode(json.loads(request["expression"]))
-        result = ee.data.computePixels(request)
+    # Dispatch to the correct EE endpoint, inside the request budget, and wait out the
+    # rate rejections (2, 4, 8, 16 seconds) instead of splitting the tile.
+    result = None
+    for attempt in range(5):
+        try:
+            with _REQUEST_SLOTS:
+                result = _call_pixels(manifest)
+            break
+        except Exception as exc:
+            if not is_rate_error(exc) or attempt == 4:
+                raise
+            time.sleep(2 ** (attempt + 1))
 
     # NUMPY_NDARRAY: always in-memory, ignore out_path
     if file_format == "NUMPY_NDARRAY":

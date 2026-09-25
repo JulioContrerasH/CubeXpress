@@ -437,3 +437,12 @@ def test_download_with_retry_gives_up_after_max_depth(monkeypatch, tmp_path):
     monkeypatch.setattr("cubexpress.download.manifest.download_manifest", siempre_memoria)
     with pytest.raises(Exception, match="memory"):
         tiling.download_with_retry(_make_manifest(4096, 4096), tmp_path / "y.tif", max_depth=1)
+
+
+def test_a_rate_error_is_not_a_size_error():
+    """'concurrency limit was exceeded' says exceed but is not about size: it gets a wait."""
+    from cubexpress.download.tiling import is_size_error
+
+    rate = Exception("Too Many Requests: Request was rejected because the concurrency limit was exceeded.")
+    assert is_size_error(rate) is False
+    assert is_size_error(Exception("Pixel grid dimensions (103439x55072) must be less than or equal to 32768."))

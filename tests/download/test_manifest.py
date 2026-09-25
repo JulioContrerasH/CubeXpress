@@ -254,3 +254,77 @@ def test_write_lock_is_stable_per_path(tmp_path):
     a, b = tmp_path / "x.tif", tmp_path / "y.tif"
     assert _write_lock(a) is _write_lock(a)
     assert _write_lock(a) is not _write_lock(b)
+
+
+# --- el limite de concurrencia: 429 con espera, y cupo global de requests ---
+
+_429 = ("Too Many Requests: Request was rejected because the concurrency limit was exceeded. "
+        "Learn more at ...")
+
+
+def test_is_rate_error_detects_the_concurrency_message():
+    from cubexpress.download.manifest import is_rate_error
+
+    assert is_rate_error(Exception(_429))
+    assert not is_rate_error(Exception("Total request size (150994944 bytes) must be ..."))
+
+
+def test_a_rate_error_gets_a_wait_and_a_retry(monkeypatch):
+    """Two 429s and then success: the download must not fail nor split."""
+    import ee
+
+    from cubexpress.download.manifest import download_manifest
+
+    monkeypatch.setattr("cubexpress.download.manifest.time.sleep", lambda _s: None)
+    llamadas = []
+
+    def falso_get_pixels(request):
+        llamadas.append(request)
+        if len(llamadas) < 3:
+            raise Exception(_429)
+        return b"tif"
+
+    monkeypatch.setattr(ee.data, "getPixels", falso_get_pixels)
+    ruta = "/tmp/opencode/rate_test.tif"
+    import pathlib as _p
+    _p.Path(ruta).parent.mkdir(parents=True, exist_ok=True)
+    manifiesto = {"fileFormat": "GEO_TIFF", "bandIds": ["B4"], "assetId": "X",
+                  "grid": {"crsCode": "EPSG:32718", "dimensions": {"width": 2, "height": 2},
+                           "affineTransform": {"scaleX": 10, "shearX": 0, "translateX": 0,
+                                               "scaleY": -10, "shearY": 0, "translateY": 0}}}
+    download_manifest(manifiesto, out_path=ruta)
+    assert len(llamadas) == 3
+
+
+def test_the_request_budget_caps_concurrency(monkeypatch):
+    """The nested retries cannot push the project over its concurrent request limit."""
+    import threading
+    import time as _time
+
+    import ee
+
+    import cubexpress.download.manifest as m
+
+    m._set_max_requests(2)
+    vivos = []
+    pico = []
+
+    def falso_get_pixels(request):
+        vivos.append(1)
+        pico.append(len(vivos))
+        _time.sleep(0.05)
+        vivos.pop()
+        return b"tif"
+
+    monkeypatch.setattr(ee.data, "getPixels", falso_get_pixels)
+    manifiesto = {"fileFormat": "GEO_TIFF", "bandIds": ["B4"], "assetId": "X",
+                  "grid": {"crsCode": "EPSG:32718", "dimensions": {"width": 2, "height": 2},
+                           "affineTransform": {"scaleX": 10, "shearX": 0, "translateX": 0,
+                                               "scaleY": -10, "shearY": 0, "translateY": 0}}}
+    hilos = [threading.Thread(target=m.download_manifest, args=(manifiesto,)) for _ in range(8)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+    m._set_max_requests(16)
+    assert max(pico) <= 2
