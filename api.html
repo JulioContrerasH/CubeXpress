@@ -868,8 +868,9 @@
     <div class="doc doc-contents first">
 
         <p>Build a RasterTransform centered on (lon, lat).</p>
-<p>The resulting patch is <code>width</code> x <code>height</code> pixels at <code>scale</code> meters/pixel,
-projected to the appropriate UTM zone for the given coordinates.</p>
+<p>The resulting patch is <code>width</code> x <code>height</code> pixels, with its geometric center on the point
+and its translate_x/translate_y at the upper-left corner (the same anchor every builder
+uses). The CRS is the UTM zone of the coordinates, unless <code>target_crs</code> says otherwise.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -956,11 +957,44 @@ projected to the appropriate UTM zone for the given coordinates.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Pixel size in meters (must be &gt; 0).</p>
+                <p>Pixel size in metres, or in degrees when <code>scale_unit="deg"</code>.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>target_crs</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CRS of the output. None → the automatic UTM zone by (lon, lat).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>scale_unit</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>"m" (default) or "deg". A geographic target in metres gets the value
+converted to degrees at that latitude.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;m&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -983,6 +1017,29 @@ projected to the appropriate UTM zone for the given coordinates.</p>
             <td>
               <div class="doc-md-description">
                 <p>RasterTransform anchored so its bounding box is centered on (lon, lat).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>if scale &lt;= 0, or if <code>scale_unit="deg"</code> with a projected target.</p>
               </div>
             </td>
           </tr>
