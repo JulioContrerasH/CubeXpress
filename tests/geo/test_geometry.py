@@ -227,3 +227,10 @@ def test_rt_to_geometry_sheared_is_exact(require_ee):
     solo_bbox = ee.Geometry.Point([450_050.0, 8_599_050.0], proj="EPSG:32718")
     assert geom.contains(dentro).getInfo() is True
     assert geom.contains(solo_bbox).getInfo() is False
+
+
+def test_point_to_geometry_accepts_a_target(monkeypatch):
+    captured = _patch_rectangle(monkeypatch)
+    point_to_geometry(lon=-77.04, lat=-12.06, width=200, height=200, scale=10,
+                      target_crs="EPSG:24878")
+    assert captured["proj"] == "EPSG:24878"

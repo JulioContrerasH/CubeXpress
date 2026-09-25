@@ -1,4 +1,9 @@
-"""Geometry constructors that build RasterTransforms from various inputs."""
+"""Geometry constructors that build RasterTransforms from various inputs.
+
+Anchor rule, for all of them: `translate_x`/`translate_y` is the upper-left corner of the
+covered grid (the GDAL convention), and `width` x `height` grow right and down from there.
+The point builders (`point_to_rt`, `point_to_geometry`) center the patch on the point.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ from pyproj.aoi import AreaOfInterest
 from pyproj.database import query_utm_crs_info
 from shapely.ops import transform as shp_transform
 
-from cubexpress.geo.transform import MAX_DEGREES, MIN_METRES, RasterTransform
+from cubexpress.geo.transform import MAX_DEGREES, MIN_METRES, RasterTransform, _gee_crs
 
 
 def _require_number(name: str, value) -> None:
@@ -50,21 +55,30 @@ def point_to_rt(
     width: int,
     height: int,
     scale: float,
+    target_crs: str | None = None,
+    scale_unit: str = "m",
 ) -> RasterTransform:
     """Build a RasterTransform centered on (lon, lat).
 
-    The resulting patch is `width` x `height` pixels at `scale` meters/pixel,
-    projected to the appropriate UTM zone for the given coordinates.
+    The resulting patch is `width` x `height` pixels, with its geometric center on the point
+    and its translate_x/translate_y at the upper-left corner (the same anchor every builder
+    uses). The CRS is the UTM zone of the coordinates, unless `target_crs` says otherwise.
 
     Args:
         lon: Longitude in decimal degrees, range [-180, 180].
         lat: Latitude in decimal degrees, range [-90, 90].
         width: Patch width in pixels (must be > 0).
         height: Patch height in pixels (must be > 0).
-        scale: Pixel size in meters (must be > 0).
+        scale: Pixel size in metres, or in degrees when `scale_unit="deg"`.
+        target_crs: CRS of the output. None → the automatic UTM zone by (lon, lat).
+        scale_unit: "m" (default) or "deg". A geographic target in metres gets the value
+            converted to degrees at that latitude.
 
     Returns:
         RasterTransform anchored so its bounding box is centered on (lon, lat).
+
+    Raises:
+        ValueError: if scale <= 0, or if `scale_unit="deg"` with a projected target.
     """
     _require_number("lon", lon)
     _require_number("lat", lat)
@@ -74,19 +88,25 @@ def point_to_rt(
     if scale <= 0:
         raise ValueError(f"scale must be > 0, got {scale}")
 
-    crs = _utm_zone_epsg(lon, lat)
+    if target_crs is None:
+        crs = _utm_zone_epsg(lon, lat)
+    else:
+        crs = _gee_crs(target_crs)          # a WKT1 is respected as is (the Equi7 escape)
+
+    scale_x, scale_y = _pixel_size(crs, scale, lat, scale_unit)
+
     transformer = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
     cx, cy = transformer.transform(lon, lat)
 
-    ul_x = cx - (width * scale) / 2
-    ul_y = cy + (height * scale) / 2
+    ul_x = cx - (width * scale_x) / 2
+    ul_y = cy + (height * abs(scale_y)) / 2
 
     return RasterTransform(
         crs=crs,
         translate_x=ul_x,
         translate_y=ul_y,
-        scale_x=scale,
-        scale_y=-scale,
+        scale_x=scale_x,
+        scale_y=scale_y,
         width=width,
         height=height,
     )

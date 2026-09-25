@@ -84,6 +84,8 @@ def point_to_geometry(
     width: int,
     height: int,
     scale: float,
+    target_crs: str | None = None,
+    scale_unit: str = "m",
 ) -> ee.Geometry:
     """Build an ee.Geometry rectangle around a point, sized in pixels.
 
@@ -99,10 +101,13 @@ def point_to_geometry(
         lat: Latitude in decimal degrees, range [-90, 90].
         width: Patch width in pixels (must be > 0).
         height: Patch height in pixels (must be > 0).
-        scale: Pixel size in meters (must be > 0).
+        scale: Pixel size in metres, or in degrees when `scale_unit="deg"`.
+        target_crs: CRS of the geometry. None → the automatic UTM zone by (lon, lat).
+        scale_unit: "m" (default) or "deg".
 
     Returns:
-        An ee.Geometry.Rectangle in the appropriate UTM zone for (lon, lat).
+        An ee.Geometry.Rectangle, in the same CRS as the rt `point_to_rt` would build.
     """
-    rt = point_to_rt(lon=lon, lat=lat, width=width, height=height, scale=scale)
+    rt = point_to_rt(lon=lon, lat=lat, width=width, height=height, scale=scale,
+                     target_crs=target_crs, scale_unit=scale_unit)
     return rt_to_geometry(rt)

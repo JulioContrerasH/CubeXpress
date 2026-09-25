@@ -901,3 +901,35 @@ def test_crossing_polygon_works_with_an_explicit_projected_target():
     assert abs(xmin - 809_444) < 500
     assert abs(xmax - 830_984) < 500
     assert (rt.width, rt.height) == (718, 380)
+
+
+# --- point_to_rt: destino explícito y unidad (estandarizado el 2026-09-25) ---
+
+def test_point_to_rt_accepts_a_target_crs():
+    """Un chip en PSAD56 desde lon/lat, centrado en el punto."""
+    from pyproj import Transformer
+
+    rt = point_to_rt(-77.04, -12.06, 200, 200, 10, target_crs="EPSG:24878")
+    assert rt.crs == "EPSG:24878"
+    cx, cy = Transformer.from_crs("EPSG:4326", "EPSG:24878", always_xy=True).transform(-77.04, -12.06)
+    xmin, ymin, xmax, ymax = rt.bbox()
+    assert (xmin + xmax) / 2 == pytest.approx(cx, abs=1e-6)
+    assert (ymin + ymax) / 2 == pytest.approx(cy, abs=1e-6)
+
+
+def test_point_to_rt_geographic_target_converts_the_metres():
+    rt = point_to_rt(-77.04, -12.06, 200, 200, 30, target_crs="EPSG:4326")
+    assert rt.crs == "EPSG:4326"
+    assert rt.scale_x == pytest.approx(0.000275, abs=1e-6)
+    assert rt.scale_y == pytest.approx(-0.000271, abs=1e-6)
+
+
+def test_point_to_rt_accepts_degrees_with_the_flag():
+    rt = point_to_rt(-77.04, -12.06, 200, 200, 0.000269,
+                     target_crs="EPSG:4326", scale_unit="deg")
+    assert rt.scale_x == 0.000269
+
+
+def test_point_to_rt_degrees_need_a_geographic_target():
+    with pytest.raises(ValueError, match="projected"):
+        point_to_rt(-77.04, -12.06, 200, 200, 0.5, scale_unit="deg")
